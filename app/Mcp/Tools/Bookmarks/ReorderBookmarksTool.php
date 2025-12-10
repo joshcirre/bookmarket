@@ -55,7 +55,7 @@ class ReorderBookmarksTool extends Tool
             ->get()
             ->keyBy('id');
 
-        $missingIds = array_diff($bookmarkIds, $bookmarks->keys()->toArray());
+        $missingIds = array_diff($bookmarkIds, $bookmarks->keys()->all());
         if ($missingIds !== []) {
             return Response::error(
                 'Some bookmark IDs were not found in this list: '.implode(', ', $missingIds)

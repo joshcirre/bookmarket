@@ -50,7 +50,7 @@ class CleanupTagsTool extends Tool
     /**
      * Find potential duplicate tags.
      */
-    private function findDuplicates(\App\Models\User $user, bool $preview): Response|ResponseFactory
+    private function findDuplicates(\App\Models\User $user, bool $preview): \Laravel\Mcp\ResponseFactory
     {
         // Get all tags used by this user's bookmarks
         $userTags = DB::table('tags')
@@ -72,6 +72,7 @@ class CleanupTagsTool extends Tool
             if (! isset($groups[$normalizedSlug])) {
                 $groups[$normalizedSlug] = [];
             }
+
             $groups[$normalizedSlug][] = [
                 'id' => $tag->id,
                 'name' => $tag->name,
@@ -85,12 +86,12 @@ class CleanupTagsTool extends Tool
         foreach ($groups as $slug => $tags) {
             if (count($tags) > 1) {
                 // Sort by bookmarks_count desc so most used is first (recommended to keep)
-                usort($tags, fn ($a, $b): int => $b['bookmarks_count'] <=> $a['bookmarks_count']);
+                usort($tags, fn (array $a, array $b): int => $b['bookmarks_count'] <=> $a['bookmarks_count']);
                 $duplicates[] = [
                     'normalized_slug' => $slug,
                     'tags' => $tags,
                     'suggested_keep' => $tags[0]['name'],
-                    'suggested_remove' => array_map(fn ($t): string => $t['name'], array_slice($tags, 1)),
+                    'suggested_remove' => array_map(fn (array $t): string => $t['name'], array_slice($tags, 1)),
                 ];
             }
         }
@@ -124,20 +125,20 @@ class CleanupTagsTool extends Tool
      *
      * @param  array<int, array{keep: string, remove: array<int, string>}>  $merges
      */
-    private function executeMerge(\App\Models\User $user, array $merges): Response|ResponseFactory
+    private function executeMerge(\App\Models\User $user, array $merges): \Laravel\Mcp\ResponseFactory
     {
         $results = [];
 
         foreach ($merges as $merge) {
             $keepName = trim($merge['keep']);
-            $removeNames = array_map('trim', $merge['remove']);
+            $removeNames = array_map(trim(...), $merge['remove']);
 
             // Find or create the tag to keep
             $keepTag = Tag::findOrCreateByName($keepName);
 
             // Find tags to remove
             $removeTags = Tag::query()
-                ->whereIn('slug', array_map(fn ($name): string => Str::slug($name), $removeNames))
+                ->whereIn('slug', array_map(fn (string $name): string => Str::slug($name), $removeNames))
                 ->get();
 
             if ($removeTags->isEmpty()) {
