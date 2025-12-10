@@ -7,6 +7,7 @@ use Closure;
 use Firebase\JWT\JWK;
 use Firebase\JWT\JWT;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -36,10 +37,11 @@ class VerifyWorkOsJwt
             $user = User::query()->where('workos_id', $decoded->sub)->first();
 
             if (! $user) {
-                return $this->unauthorizedResponse('User not found');
+                return $this->unauthorizedResponse('User not found for sub: '.$decoded->sub);
             }
 
-            $request->setUserResolver(fn () => $user);
+            // Set the user on Laravel's auth system so MCP Request->user() works
+            Auth::setUser($user);
 
             return $next($request);
         } catch (\Exception) {
