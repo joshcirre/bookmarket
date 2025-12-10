@@ -1,6 +1,6 @@
-# WorkOS AuthKit for MCP Authentication
+# WorkOS AuthKit vs Laravel Passport for MCP Authentication
 
-A guide for Laravel developers considering WorkOS AuthKit as their OAuth provider for MCP (Model Context Protocol) servers, instead of Laravel Passport.
+A guide for Laravel developers choosing between WorkOS AuthKit and Laravel Passport for MCP (Model Context Protocol) authentication.
 
 ## The Scenario
 
@@ -11,14 +11,14 @@ You're building a Laravel app that:
 
 ## Two Approaches
 
-### Option A: Laravel Passport (Default Laravel MCP Approach)
+### Option A: Laravel Passport (Standard Approach)
 
 Laravel MCP's documentation recommends Passport:
 
 ```php
 // routes/ai.php
 Mcp::oauthRoutes();
-Mcp::web('/mcp/bookmarket', BookmarketServer::class)
+Mcp::web('/mcp', BookmarketServer::class)
     ->middleware('auth:api');
 ```
 
@@ -29,13 +29,13 @@ Mcp::web('/mcp/bookmarket', BookmarketServer::class)
 - Publish and customize the authorization view
 - Configure Passport in `AppServiceProvider`
 
-### Option B: WorkOS AuthKit (What We Built)
+### Option B: WorkOS AuthKit (Custom Approach)
 
 Use WorkOS as your OAuth authorization server directly:
 
 ```php
 // routes/ai.php
-Mcp::web('/mcp/bookmarket', BookmarketServer::class)
+Mcp::web('/mcp', BookmarketServer::class)
     ->middleware('workos.jwt');
 ```
 
@@ -48,64 +48,128 @@ Mcp::web('/mcp/bookmarket', BookmarketServer::class)
 
 ---
 
-## Why WorkOS AuthKit for MCP?
+## Honest Comparison
 
-### 1. Single Identity System
+### What's the SAME with Both Approaches
 
-With Passport, you'd have two authentication systems:
-- WorkOS for your web app (GitHub OAuth login)
-- Passport for MCP/API access
+**User identity is the same either way.** With Passport, the flow is:
 
-**The problem:** Users might wonder why they have two different ways to authenticate, or worse, need separate credentials.
+1. MCP client requests authorization
+2. User redirected to your Laravel app
+3. Laravel checks if user is logged in → if not, redirects to WorkOS (GitHub OAuth)
+4. User authenticates via WorkOS, comes back logged in
+5. User sees Passport authorization screen: "Allow Claude Code to access your bookmarks?"
+6. User approves → Passport issues token **linked to that same WorkOS user**
 
-With WorkOS for both:
-- User logs in via GitHub (WorkOS) on your web app
-- User authorizes AI agent via GitHub (WorkOS) for MCP
-- Same identity, same flow, no confusion
+So **"single identity"** isn't a differentiator - both approaches use the same user. The difference is **who issues and manages the MCP tokens**.
 
-### 2. Zero Database Tables
+### Actual Trade-offs
 
-| Approach | New Tables Required |
-|----------|---------------------|
-| Passport | `oauth_clients`, `oauth_access_tokens`, `oauth_refresh_tokens`, `oauth_auth_codes`, `oauth_personal_access_clients` |
-| WorkOS | None - stateless JWT validation |
+| Aspect | WorkOS Only | WorkOS + Passport |
+|--------|-------------|-------------------|
+| Web login | WorkOS | WorkOS |
+| MCP token issuer | WorkOS (JWT) | Passport |
+| User identity | Same user | Same user |
+| Token storage | WorkOS cloud (stateless) | Your database |
+| Token visibility | Limited (see below) | Full - query `oauth_access_tokens` |
+| Token revocation | Unclear | Easy - update DB or build admin UI |
+| New DB tables | None | 5+ Passport tables |
+| Setup complexity | Custom middleware | `Mcp::oauthRoutes()` |
+| Packages needed | `firebase/php-jwt` | `laravel/passport` |
 
-WorkOS issues JWTs that you validate against their public JWKS endpoint. No token storage needed.
+### Token Visibility: An Honest Look
 
-### 3. Built-in Token Management
+**What WorkOS Dashboard shows:**
+- OAuth clients (MCP applications) that have registered via Dynamic Client Registration
+- You'll see entries like "Claude Code (bookmarket)"
+- **But:** You don't see which users authorized which clients, or when
 
-**With Passport:**
-- Tokens live in your `oauth_access_tokens` table
-- Need to build admin UI to view/revoke tokens
-- No audit trail unless you build it
+**What Passport gives you:**
+- `oauth_access_tokens` table with:
+  - `user_id` - exactly which user
+  - `client_id` - which MCP client
+  - `created_at` - when authorized
+  - `revoked` - easy revocation
 
-**With WorkOS:**
-- See all sessions in WorkOS Dashboard
-- View which clients (AI agents) have access
-- Revoke access with one click
-- Built-in audit logs
-
-### 4. Enterprise-Ready Features
-
-WorkOS includes features you'd have to build yourself with Passport:
-- SSO (SAML, OIDC) if you need it later
-- Directory sync
-- Audit logs
-- Compliance certifications
-
-### 5. WorkOS Maintains the OAuth Server
-
-The MCP spec evolves. With WorkOS:
-- They keep up with spec changes
-- You just validate JWTs
-
-With Passport:
-- You're responsible for OAuth compliance
-- May need to update as MCP spec changes
+**Bottom line:** Passport actually gives you MORE visibility into token grants, not less.
 
 ---
 
-## What We Had to Build
+## Why Choose WorkOS Only?
+
+### 1. Simplicity - One Less System
+
+With Passport alongside WorkOS, you maintain:
+- WorkOS for web authentication
+- Passport for MCP token issuance
+- Two systems to understand and debug
+
+With WorkOS only:
+- One authentication provider for everything
+- Fewer moving parts
+- Less code to maintain
+
+### 2. No Additional Database Tables
+
+Passport creates 5+ tables. WorkOS JWTs are stateless - nothing to store.
+
+### 3. One Less Package
+
+No `laravel/passport` dependency. Fewer updates to track.
+
+### 4. Future Enterprise Features
+
+If you ever need SSO, directory sync, or compliance features, WorkOS has them built-in.
+
+---
+
+## Why Choose Passport?
+
+### 1. First-Class Laravel MCP Support
+
+```php
+Mcp::oauthRoutes();  // That's it - all OAuth endpoints configured
+```
+
+vs. custom middleware and discovery routes with WorkOS.
+
+### 2. Better Token Visibility
+
+See exactly which tokens exist:
+```sql
+SELECT users.email, oauth_clients.name, oauth_access_tokens.created_at
+FROM oauth_access_tokens
+JOIN users ON users.id = oauth_access_tokens.user_id
+JOIN oauth_clients ON oauth_clients.id = oauth_access_tokens.client_id;
+```
+
+### 3. Easy Revocation
+
+```php
+// Revoke a specific token
+$token->revoke();
+
+// Revoke all tokens for a user
+$user->tokens()->update(['revoked' => true]);
+```
+
+### 4. Custom Scopes
+
+Fine-grained permissions:
+```php
+Passport::tokensCan([
+    'bookmarks:read' => 'Read your bookmarks',
+    'bookmarks:write' => 'Create and modify bookmarks',
+]);
+```
+
+### 5. Self-Hosted
+
+All token data stays in your database. No external dependencies for token validation.
+
+---
+
+## What We Built (WorkOS Approach)
 
 ### 1. JWT Verification Middleware
 
@@ -136,7 +200,7 @@ class VerifyWorkOsJwt
                 return $this->unauthorizedResponse('User not found');
             }
 
-            // Set user on Laravel's auth system
+            // Set user on Laravel's auth system (required for MCP)
             Auth::setUser($user);
 
             return $next($request);
@@ -182,30 +246,26 @@ Route::get('/.well-known/oauth-authorization-server/{path?}', function () {
 })->name('mcp.oauth.authorization-server');
 ```
 
-**Important:** The route names (`mcp.oauth.protected-resource` and `mcp.oauth.authorization-server`) must match what Laravel MCP expects.
+**Important:** The route names must match what Laravel MCP expects.
 
 ### 3. WorkOS Dashboard Configuration
 
-In WorkOS Dashboard:
 1. Go to **Connect** > **Configuration**
-2. Enable **Dynamic Client Registration** (required for MCP clients to self-register)
+2. Enable **Dynamic Client Registration**
 3. Note your **AuthKit Domain** (e.g., `https://your-subdomain.authkit.app`)
 
-### 4. Environment Configuration
+---
 
-```env
-WORKOS_AUTHKIT_DOMAIN=https://your-subdomain.authkit.app
-```
+## This App Has Both!
 
-```php
-// config/services.php
-'workos' => [
-    'client_id' => env('WORKOS_CLIENT_ID'),
-    'api_key' => env('WORKOS_API_KEY'),
-    'redirect_url' => env('WORKOS_REDIRECT_URL'),
-    'authkit_domain' => env('WORKOS_AUTHKIT_DOMAIN'),
-],
-```
+To demonstrate the difference, this app implements both approaches:
+
+| Endpoint | Auth Method | Description |
+|----------|-------------|-------------|
+| `/mcp` | WorkOS JWT | Custom WorkOS integration |
+| `/mcp/passport` | Passport | Standard Laravel MCP approach |
+
+Both endpoints serve the same tools - you can compare the setup and behavior.
 
 ---
 
@@ -214,53 +274,34 @@ WORKOS_AUTHKIT_DOMAIN=https://your-subdomain.authkit.app
 ### Adding MCP to Claude Code
 
 ```bash
-claude mcp add bookmarket --transport http https://your-app.com/mcp/bookmarket
+# WorkOS approach
+claude mcp add bookmarket --transport http https://your-app.com/mcp
+
+# Passport approach
+claude mcp add bookmarket-passport --transport http https://your-app.com/mcp/passport
 ```
 
-### What Happens
+### What Happens (Both Approaches)
 
 1. Claude Code requests access to your MCP server
-2. Your server returns 401 with `WWW-Authenticate` header pointing to OAuth metadata
-3. Claude Code discovers WorkOS as the authorization server
-4. Browser opens to WorkOS AuthKit (GitHub OAuth)
-5. User logs in (or is already logged in)
+2. Your server returns 401 with `WWW-Authenticate` header
+3. Claude Code discovers the authorization server
+4. Browser opens for authentication
+5. User logs in via GitHub (WorkOS) if not already
 6. User approves the AI agent's access
-7. WorkOS issues JWT to Claude Code
-8. Claude Code includes JWT in all MCP requests
-9. Your middleware validates JWT and attaches the user
+7. Token issued to Claude Code
+8. Claude Code includes token in all MCP requests
 
-**No manual token copying. No separate credentials. Just click approve.**
-
----
-
-## Comparison Summary
-
-| Feature | Passport | WorkOS AuthKit |
-|---------|----------|----------------|
-| Database tables | 5+ new tables | None |
-| Token storage | Your database | WorkOS cloud |
-| Authorization UI | Build yourself | Built-in |
-| Key management | You manage | WorkOS manages |
-| Token visibility | Query database | WorkOS Dashboard |
-| Token revocation | Build admin UI | One-click in dashboard |
-| Audit logs | Build yourself | Built-in |
-| Setup time | ~30 minutes | ~15 minutes |
-| Identity system | Separate from web auth | Same as web auth |
-
----
-
-## When to Use Passport Instead
-
-Passport might be better if:
-- You're not already using WorkOS for authentication
-- You need custom OAuth scopes/permissions
-- You want to self-host everything
-- You're already using Passport for other APIs
+**No manual token copying. Same GitHub login. Just click approve.**
 
 ---
 
 ## Key Takeaway
 
-> "If you're already using WorkOS for authentication, using it for MCP too means one login for users, no duplicate OAuth systems, and you get token management for free."
+> "Both approaches work well. The choice comes down to: Do you want the simplicity of one auth system (WorkOS only), or do you want better token visibility and Laravel-native MCP support (Passport)?"
 
-The extra setup (middleware + discovery routes) is a one-time thing. After that, you get a simpler architecture and better visibility into who's accessing your app via AI agents.
+**Choose WorkOS only if:** You value simplicity and are already all-in on WorkOS.
+
+**Choose Passport if:** You want to see exactly which users have authorized which AI agents, with easy revocation.
+
+For this app, we chose WorkOS because we're already using it for web auth and wanted to keep things simple. But Passport is a completely valid choice - and we've included it at `/mcp/passport` so you can see both in action.
