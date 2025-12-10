@@ -40,7 +40,7 @@ Mcp::web('/mcp', BookmarketServer::class)
 // Pros: First-class Laravel support, token visibility in DB
 // Cons: 5+ extra DB tables, two auth systems to maintain
 // ============================================================================
-Mcp::oauthRoutes('/mcp/passport');
+// Mcp::oauthRoutes('/mcp/passport');
 
-Mcp::web('/mcp/passport', BookmarketServer::class)
-    ->middleware('auth:api');
+// Mcp::web('/mcp/passport', BookmarketServer::class)
+//     ->middleware('auth:api');
