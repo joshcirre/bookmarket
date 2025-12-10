@@ -7,13 +7,15 @@ use Livewire\Volt\Volt;
 Route::get('/', fn (): \Illuminate\Contracts\View\Factory|\Illuminate\Contracts\View\View => view('welcome'));
 
 // OAuth Protected Resource Metadata (MCP spec)
+// Named 'mcp.oauth.protected-resource' so Laravel MCP's AddWwwAuthenticateHeader middleware can find it
 Route::get('/.well-known/oauth-protected-resource/{path?}', fn () => response()->json([
     'resource' => config('app.url'),
     'authorization_servers' => [config('services.workos.authkit_domain')],
     'bearer_methods_supported' => ['header'],
-]))->where('path', '.*');
+]))->where('path', '.*')->name('mcp.oauth.protected-resource');
 
 // OAuth Authorization Server Metadata - proxy to WorkOS AuthKit
+// Named 'mcp.oauth.authorization-server' for consistency with MCP conventions
 Route::get('/.well-known/oauth-authorization-server/{path?}', function () {
     $authkitDomain = config('services.workos.authkit_domain');
 
@@ -28,7 +30,7 @@ Route::get('/.well-known/oauth-authorization-server/{path?}', function () {
         'code_challenge_methods_supported' => ['S256'],
         'grant_types_supported' => ['authorization_code', 'refresh_token'],
     ]);
-})->where('path', '.*');
+})->where('path', '.*')->name('mcp.oauth.authorization-server');
 
 Route::middleware([
     'auth',
