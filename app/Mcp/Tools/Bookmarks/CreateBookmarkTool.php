@@ -116,8 +116,7 @@ class CreateBookmarkTool extends Tool
                 ->description('Personal notes about the bookmark.'),
 
             'tags' => $schema->array()
-                ->items($schema->string())
-                ->description('Array of tag names. IMPORTANT: Use list_tags first to see existing tags and reuse them instead of creating duplicates (e.g., use "javascript" if it exists, not "JavaScript" or "JS").'),
+                ->description('Array of tag names (strings). IMPORTANT: Use list_tags first to see existing tags and reuse them instead of creating duplicates.'),
         ];
     }
 }

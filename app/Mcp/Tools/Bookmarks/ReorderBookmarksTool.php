@@ -91,8 +91,7 @@ class ReorderBookmarksTool extends Tool
                 ->required(),
 
             'bookmark_ids' => $schema->array()
-                ->items($schema->integer())
-                ->description('Array of bookmark IDs in the desired order. Position 0 will have position 1, etc.')
+                ->description('Array of bookmark IDs (integers) in the desired order. Position 0 will have position 1, etc.')
                 ->required(),
         ];
     }

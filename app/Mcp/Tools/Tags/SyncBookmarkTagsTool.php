@@ -85,8 +85,7 @@ class SyncBookmarkTagsTool extends Tool
                 ->required(),
 
             'tags' => $schema->array()
-                ->items($schema->string())
-                ->description('Array of tag names. This replaces all existing tags. Use empty array [] to remove all tags. IMPORTANT: Use list_tags first to see existing tags and reuse them (e.g., use "javascript" if it exists, not "JavaScript" or "JS").')
+                ->description('Array of tag names (strings). This replaces all existing tags. Use empty array [] to remove all tags. IMPORTANT: Use list_tags first to see existing tags and reuse them.')
                 ->required(),
         ];
     }

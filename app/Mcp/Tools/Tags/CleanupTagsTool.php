@@ -224,14 +224,7 @@ class CleanupTagsTool extends Tool
                 ->default(true),
 
             'merge' => $schema->array()
-                ->items(
-                    $schema->object()
-                        ->properties(
-                            keep: $schema->string()->description('The tag name to keep (all bookmarks will use this tag).'),
-                            remove: $schema->array()->items($schema->string())->description('Tag names to merge into the keep tag and remove.')
-                        )
-                )
-                ->description('Array of merge operations. Each specifies a tag to keep and tags to merge into it.'),
+                ->description('Array of merge operations. Each object should have "keep" (string - tag name to keep) and "remove" (array of strings - tag names to merge into keep tag).'),
         ];
     }
 }
