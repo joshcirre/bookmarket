@@ -59,6 +59,10 @@ class Bookmark extends Model
             $bookmark->bookmarkList->increment('bookmarks_count');
         });
 
+        static::deleting(function (Bookmark $bookmark): void {
+            $bookmark->tags()->detach();
+        });
+
         static::deleted(function (Bookmark $bookmark): void {
             $bookmark->bookmarkList->decrement('bookmarks_count');
         });

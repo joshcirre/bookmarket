@@ -10,7 +10,7 @@ test('profile page is displayed', function (): void {
 });
 
 test('profile information can be updated', function (): void {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['username' => 'testuser']);
 
     $this->actingAs($user);
 

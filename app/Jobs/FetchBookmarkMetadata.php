@@ -178,7 +178,7 @@ PROMPT;
      */
     private function attachTags(array $tagNames): void
     {
-        $tagIds = collect($tagNames)->map(fn ($name) => Tag::findOrCreateByName(strtolower(trim((string) $name)))->id);
+        $tagIds = collect($tagNames)->map(fn ($name) => Tag::findOrCreateByName(strtolower(trim($name)))->id);
 
         $this->bookmark->tags()->syncWithoutDetaching($tagIds);
     }
