@@ -4,6 +4,7 @@ namespace App\Mcp\Tools\Bookmarks;
 
 use App\Models\Bookmark;
 use App\Models\BookmarkList;
+use App\Models\Tag;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -17,7 +18,7 @@ class CreateBookmarkTool extends Tool
     /**
      * The tool's description.
      */
-    protected string $description = 'Create a new bookmark in a specified list.';
+    protected string $description = 'Create a new bookmark in a specified list. IMPORTANT: Before creating, use list_tags to see existing tags and reuse them when appropriate instead of creating duplicates.';
 
     /**
      * Handle the tool request.
@@ -30,6 +31,8 @@ class CreateBookmarkTool extends Tool
             'title' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
             'notes' => 'nullable|string|max:5000',
+            'tags' => 'nullable|array',
+            'tags.*' => 'string|max:50',
         ], [
             'list_id.required' => 'You must specify a list_id to add the bookmark to.',
             'url.required' => 'You must provide a URL for the bookmark.',
@@ -58,6 +61,17 @@ class CreateBookmarkTool extends Tool
             'notes' => $validated['notes'] ?? null,
         ]);
 
+        // Attach tags if provided
+        if (! empty($validated['tags'])) {
+            $tagIds = collect($validated['tags'])
+                ->map(fn ($name): Tag => Tag::findOrCreateByName(trim((string) $name)))
+                ->pluck('id')
+                ->toArray();
+            $bookmark->tags()->sync($tagIds);
+        }
+
+        $bookmark->load('tags');
+
         return Response::structured([
             'message' => 'Bookmark created successfully.',
             'bookmark' => [
@@ -69,6 +83,7 @@ class CreateBookmarkTool extends Tool
                 'notes' => $bookmark->notes,
                 'domain' => $bookmark->domain,
                 'position' => $bookmark->position,
+                'tags' => $bookmark->tags->pluck('name')->toArray(),
                 'created_at' => $bookmark->created_at?->toIso8601String(),
             ],
         ]);
@@ -99,6 +114,10 @@ class CreateBookmarkTool extends Tool
 
             'notes' => $schema->string()
                 ->description('Personal notes about the bookmark.'),
+
+            'tags' => $schema->array()
+                ->items($schema->string())
+                ->description('Array of tag names. IMPORTANT: Use list_tags first to see existing tags and reuse them instead of creating duplicates (e.g., use "javascript" if it exists, not "JavaScript" or "JS").'),
         ];
     }
 }

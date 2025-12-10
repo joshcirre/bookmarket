@@ -19,12 +19,14 @@ class extends Component {
     public string $url = '';
     public string $notes = '';
     public array $selectedTags = [];
+    public string $newTagName = '';
 
     // Edit bookmark
     public ?int $editingId = null;
     public string $editTitle = '';
     public string $editNotes = '';
     public array $editTags = [];
+    public string $editNewTagName = '';
 
     public function mount(BookmarkList $list): void
     {
@@ -39,6 +41,40 @@ class extends Component {
             ->orderBy('name')
             ->pluck('name', 'id')
             ->toArray();
+    }
+
+    public function addNewTag(): void
+    {
+        $name = trim($this->newTagName);
+        if ($name === '') {
+            return;
+        }
+
+        $tag = Tag::findOrCreateByName($name);
+
+        if (! in_array($tag->id, $this->selectedTags, true)) {
+            $this->selectedTags[] = $tag->id;
+        }
+
+        $this->newTagName = '';
+        unset($this->availableTags);
+    }
+
+    public function addEditTag(): void
+    {
+        $name = trim($this->editNewTagName);
+        if ($name === '') {
+            return;
+        }
+
+        $tag = Tag::findOrCreateByName($name);
+
+        if (! in_array($tag->id, $this->editTags, true)) {
+            $this->editTags[] = $tag->id;
+        }
+
+        $this->editNewTagName = '';
+        unset($this->availableTags);
     }
 
     public function addBookmark(): void
@@ -64,7 +100,7 @@ class extends Component {
         // Dispatch job to fetch metadata and generate AI title/tags
         FetchBookmarkMetadata::dispatch($bookmark);
 
-        $this->reset(['url', 'notes', 'selectedTags', 'showAddModal']);
+        $this->reset(['url', 'notes', 'selectedTags', 'newTagName', 'showAddModal']);
         $this->list->refresh();
     }
 
@@ -98,7 +134,7 @@ class extends Component {
 
     public function cancelEdit(): void
     {
-        $this->reset(['editingId', 'editTitle', 'editNotes', 'editTags']);
+        $this->reset(['editingId', 'editTitle', 'editNotes', 'editTags', 'editNewTagName']);
     }
 
     public function deleteBookmark(Bookmark $bookmark): void
@@ -193,11 +229,21 @@ class extends Component {
                                 <flux:pillbox.option :value="$id">{{ $name }}</flux:pillbox.option>
                             @endforeach
                         </flux:pillbox>
-                    @else
-                        <flux:text class="text-sm text-gray-500">
-                            {{ __('Tags will be suggested automatically after saving.') }}
-                        </flux:text>
                     @endif
+                    <div class="mt-2">
+                        <flux:input.group>
+                            <flux:input
+                                wire:model="newTagName"
+                                wire:keydown.enter.prevent="addNewTag"
+                                placeholder="{{ __('Create new tag...') }}"
+                                size="sm"
+                            />
+                            <flux:button wire:click="addNewTag" size="sm" icon="plus" />
+                        </flux:input.group>
+                    </div>
+                    <flux:description>
+                        {{ __('Select existing tags or create new ones. Tags may also be suggested automatically.') }}
+                    </flux:description>
                 </flux:field>
 
                 <div class="flex items-center justify-end gap-3 pt-2">
@@ -250,6 +296,15 @@ class extends Component {
                                 @endforeach
                             </flux:pillbox>
                         @endif
+                        <flux:input.group class="mt-2">
+                            <flux:input
+                                wire:model="editNewTagName"
+                                wire:keydown.enter.prevent="addEditTag"
+                                placeholder="{{ __('New tag...') }}"
+                                size="sm"
+                            />
+                            <flux:button wire:click="addEditTag" size="sm" icon="plus" />
+                        </flux:input.group>
                         <div class="flex items-center gap-2">
                             <flux:button type="submit" variant="primary" size="sm">{{ __('Save') }}</flux:button>
                             <flux:button wire:click="cancelEdit" variant="ghost" size="sm">{{ __('Cancel') }}</flux:button>

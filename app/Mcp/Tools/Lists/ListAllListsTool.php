@@ -42,6 +42,8 @@ class ListAllListsTool extends Tool
                 'description' => $list->description,
                 'visibility' => $list->visibility->value,
                 'bookmarks_count' => $list->bookmarks_count,
+                'url' => route('lists.show', $list),
+                'public_url' => $list->isPrivate() ? null : $list->publicUrl,
                 'created_at' => $list->created_at?->toIso8601String(),
                 'updated_at' => $list->updated_at?->toIso8601String(),
                 ...($includeBookmarks ? [

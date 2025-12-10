@@ -11,6 +11,7 @@ use App\Mcp\Tools\Bookmarks\ReorderBookmarksTool;
 use App\Mcp\Tools\Bookmarks\UpdateBookmarkTool;
 use App\Models\Bookmark;
 use App\Models\BookmarkList;
+use App\Models\Tag;
 use App\Models\User;
 
 test('create_bookmark adds bookmark to list', function (): void {
@@ -217,4 +218,33 @@ test('reorder_bookmarks fails with invalid bookmark ids', function (): void {
         ]);
 
     $response->assertHasErrors();
+});
+
+test('create_bookmark with tags attaches tags', function (): void {
+    $user = User::factory()->create();
+    $list = BookmarkList::factory()->for($user)->create();
+
+    // Create an existing tag to verify reuse
+    $existingTag = Tag::findOrCreateByName('php');
+    $tagCountBefore = Tag::query()->count();
+
+    $response = BookmarketServer::actingAs($user)
+        ->tool(CreateBookmarkTool::class, [
+            'list_id' => $list->id,
+            'url' => 'https://laravel.com',
+            'title' => 'Laravel Documentation',
+            'tags' => ['php', 'laravel', 'web'],
+        ]);
+
+    $response->assertOk();
+    $response->assertSee('"tags"');
+    $response->assertSee('php');
+    $response->assertSee('laravel');
+
+    // Should have created 2 new tags (laravel, web) and reused 1 (php)
+    expect(Tag::query()->count())->toBe($tagCountBefore + 2);
+
+    $bookmark = Bookmark::query()->where('title', 'Laravel Documentation')->first();
+    expect($bookmark->tags)->toHaveCount(3);
+    expect($bookmark->tags->pluck('name')->toArray())->toContain('php', 'laravel', 'web');
 });

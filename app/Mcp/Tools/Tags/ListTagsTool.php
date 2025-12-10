@@ -17,7 +17,7 @@ class ListTagsTool extends Tool
     /**
      * The tool's description.
      */
-    protected string $description = 'List all tags used by the authenticated user, with bookmark counts.';
+    protected string $description = 'List all existing tags with bookmark counts. IMPORTANT: Always call this before creating/updating bookmarks to see available tags and reuse them instead of creating duplicates.';
 
     /**
      * Handle the tool request.

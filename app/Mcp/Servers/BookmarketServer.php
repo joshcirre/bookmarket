@@ -14,6 +14,7 @@ use App\Mcp\Tools\Lists\GetListTool;
 use App\Mcp\Tools\Lists\ListAllListsTool;
 use App\Mcp\Tools\Lists\UpdateListTool;
 use App\Mcp\Tools\Search\SearchBookmarksTool;
+use App\Mcp\Tools\Tags\CleanupTagsTool;
 use App\Mcp\Tools\Tags\ListTagsTool;
 use App\Mcp\Tools\Tags\SyncBookmarkTagsTool;
 use Laravel\Mcp\Server;
@@ -56,13 +57,16 @@ class BookmarketServer extends Server
 
         ### Search & Tags
         - `search_bookmarks` - Search across all bookmarks by title, URL, or description
-        - `list_tags` - Get all tags used by the user
+        - `list_tags` - Get all tags used by the user (ALWAYS call this before creating bookmarks to reuse existing tags)
         - `sync_bookmark_tags` - Update the tags on a bookmark
+        - `cleanup_tags` - Find and merge duplicate or similar tags
 
         ## Tips
         - Always check if a list exists before adding bookmarks to it
         - Use search to find bookmarks across all lists
         - Tags help organize bookmarks across different lists
+        - IMPORTANT: Before creating/updating bookmarks, call list_tags to see existing tags and reuse them instead of creating duplicates
+        - Use cleanup_tags periodically to find and merge duplicate tags
     MARKDOWN;
 
     /**
@@ -92,6 +96,7 @@ class BookmarketServer extends Server
         // Tags
         ListTagsTool::class,
         SyncBookmarkTagsTool::class,
+        CleanupTagsTool::class,
     ];
 
     /**

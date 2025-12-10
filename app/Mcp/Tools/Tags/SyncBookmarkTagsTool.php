@@ -17,7 +17,7 @@ class SyncBookmarkTagsTool extends Tool
     /**
      * The tool's description.
      */
-    protected string $description = 'Update the tags on a bookmark. Provide all tags the bookmark should have.';
+    protected string $description = 'Update the tags on a bookmark. IMPORTANT: Use list_tags first to see existing tags and reuse them instead of creating duplicates.';
 
     /**
      * Handle the tool request.
@@ -86,7 +86,7 @@ class SyncBookmarkTagsTool extends Tool
 
             'tags' => $schema->array()
                 ->items($schema->string())
-                ->description('Array of tag names. This replaces all existing tags. Use empty array [] to remove all tags.')
+                ->description('Array of tag names. This replaces all existing tags. Use empty array [] to remove all tags. IMPORTANT: Use list_tags first to see existing tags and reuse them (e.g., use "javascript" if it exists, not "JavaScript" or "JS").')
                 ->required(),
         ];
     }

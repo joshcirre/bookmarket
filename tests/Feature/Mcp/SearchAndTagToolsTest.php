@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Mcp\Servers\BookmarketServer;
 use App\Mcp\Tools\Search\SearchBookmarksTool;
+use App\Mcp\Tools\Tags\CleanupTagsTool;
 use App\Mcp\Tools\Tags\ListTagsTool;
 use App\Mcp\Tools\Tags\SyncBookmarkTagsTool;
 use App\Models\Bookmark;
@@ -212,4 +213,77 @@ test('sync_bookmark_tags reuses existing tags', function (): void {
     // Should not create a duplicate tag
     expect(Tag::query()->count())->toBe($tagCountBefore);
     expect($bookmark->fresh()->tags->first()->id)->toBe($existingTag->id);
+});
+
+test('cleanup_tags finds duplicate tags', function (): void {
+    $user = User::factory()->create();
+    $list = BookmarkList::factory()->for($user)->create();
+
+    // Create tags with similar names (different casing)
+    $tag1 = Tag::query()->create(['name' => 'JavaScript', 'slug' => 'javascript']);
+    $tag2 = Tag::query()->create(['name' => 'javascript', 'slug' => 'javascript-2']);
+    $tag3 = Tag::query()->create(['name' => 'PHP', 'slug' => 'php']);
+
+    $bookmark1 = Bookmark::factory()->for($list)->for($user)->create();
+    $bookmark2 = Bookmark::factory()->for($list)->for($user)->create();
+
+    $bookmark1->tags()->attach([$tag1->id, $tag3->id]);
+    $bookmark2->tags()->attach([$tag2->id]);
+
+    $response = BookmarketServer::actingAs($user)
+        ->tool(CleanupTagsTool::class, ['preview' => true]);
+
+    $response->assertOk();
+    $response->assertSee('duplicate');
+    $response->assertSee('javascript');
+});
+
+test('cleanup_tags returns clean message when no duplicates', function (): void {
+    $user = User::factory()->create();
+    $list = BookmarkList::factory()->for($user)->create();
+
+    $tag = Tag::findOrCreateByName('unique-tag');
+    $bookmark = Bookmark::factory()->for($list)->for($user)->create();
+    $bookmark->tags()->attach($tag->id);
+
+    $response = BookmarketServer::actingAs($user)
+        ->tool(CleanupTagsTool::class, ['preview' => true]);
+
+    $response->assertOk();
+    $response->assertSee('No duplicate tags found');
+});
+
+test('cleanup_tags merges tags correctly', function (): void {
+    $user = User::factory()->create();
+    $list = BookmarkList::factory()->for($user)->create();
+
+    // Create duplicate tags with different slugs
+    $tag1 = Tag::query()->create(['name' => 'JavaScript', 'slug' => 'javascript']);
+    $tag2 = Tag::query()->create(['name' => 'JS', 'slug' => 'js']);
+
+    $bookmark1 = Bookmark::factory()->for($list)->for($user)->create();
+    $bookmark2 = Bookmark::factory()->for($list)->for($user)->create();
+
+    $bookmark1->tags()->attach($tag1->id);
+    $bookmark2->tags()->attach($tag2->id);
+
+    $response = BookmarketServer::actingAs($user)
+        ->tool(CleanupTagsTool::class, [
+            'merge' => [
+                [
+                    'keep' => 'JavaScript',
+                    'remove' => ['JS'],
+                ],
+            ],
+        ]);
+
+    $response->assertOk();
+    $response->assertSee('success');
+
+    // Both bookmarks should now have the kept tag
+    $bookmark1->refresh();
+    $bookmark2->refresh();
+
+    expect($bookmark1->tags->pluck('name')->toArray())->toContain('JavaScript');
+    expect($bookmark2->tags->pluck('name')->toArray())->toContain('JavaScript');
 });
