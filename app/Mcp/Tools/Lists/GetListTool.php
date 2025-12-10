@@ -29,10 +29,14 @@ class GetListTool extends Tool
             'list_id.required' => 'You must provide a list_id to get the list.',
         ]);
 
+        /** @var \App\Models\User $user */
         $user = $request->user();
+
+        /** @var BookmarkList|null $list */
         $list = BookmarkList::with('bookmarks.tags')
             ->where('user_id', $user->id)
-            ->find($validated['list_id']);
+            ->where('id', $validated['list_id'])
+            ->first();
 
         if (! $list) {
             return Response::error('List not found. Make sure the list_id belongs to your account.');
@@ -46,9 +50,9 @@ class GetListTool extends Tool
                 'description' => $list->description,
                 'visibility' => $list->visibility->value,
                 'bookmarks_count' => $list->bookmarks_count,
-                'created_at' => $list->created_at->toIso8601String(),
-                'updated_at' => $list->updated_at->toIso8601String(),
-                'bookmarks' => $list->bookmarks->map(fn ($b) => [
+                'created_at' => $list->created_at?->toIso8601String(),
+                'updated_at' => $list->updated_at?->toIso8601String(),
+                'bookmarks' => $list->bookmarks->map(fn ($b): array => [
                     'id' => $b->id,
                     'title' => $b->title,
                     'url' => $b->url,
@@ -58,7 +62,7 @@ class GetListTool extends Tool
                     'favicon_url' => $b->favicon_url,
                     'position' => $b->position,
                     'tags' => $b->tags->pluck('name')->toArray(),
-                    'created_at' => $b->created_at->toIso8601String(),
+                    'created_at' => $b->created_at?->toIso8601String(),
                 ])->toArray(),
             ],
         ]);

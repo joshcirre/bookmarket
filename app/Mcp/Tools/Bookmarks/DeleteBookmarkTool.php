@@ -29,9 +29,13 @@ class DeleteBookmarkTool extends Tool
             'bookmark_id.required' => 'You must provide a bookmark_id to delete.',
         ]);
 
+        /** @var \App\Models\User $user */
         $user = $request->user();
-        $bookmark = Bookmark::where('user_id', $user->id)
-            ->find($validated['bookmark_id']);
+
+        /** @var Bookmark|null $bookmark */
+        $bookmark = Bookmark::query()->where('user_id', $user->id)
+            ->where('id', $validated['bookmark_id'])
+            ->first();
 
         if (! $bookmark) {
             return Response::error('Bookmark not found. Make sure the bookmark_id belongs to your account.');
@@ -44,7 +48,7 @@ class DeleteBookmarkTool extends Tool
         $bookmark->delete();
 
         return Response::structured([
-            'message' => "Bookmark \"{$title}\" has been deleted.",
+            'message' => sprintf('Bookmark "%s" has been deleted.', $title),
             'deleted' => [
                 'bookmark_id' => $bookmarkId,
                 'title' => $title,

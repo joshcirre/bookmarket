@@ -35,10 +35,13 @@ class ReorderBookmarksTool extends Tool
             'bookmark_ids.min' => 'You must provide at least one bookmark_id.',
         ]);
 
+        /** @var \App\Models\User $user */
         $user = $request->user();
 
-        $list = BookmarkList::where('user_id', $user->id)
-            ->find($validated['list_id']);
+        /** @var BookmarkList|null $list */
+        $list = BookmarkList::query()->where('user_id', $user->id)
+            ->where('id', $validated['list_id'])
+            ->first();
 
         if (! $list) {
             return Response::error('List not found. Make sure the list_id belongs to your account.');
@@ -47,13 +50,13 @@ class ReorderBookmarksTool extends Tool
         $bookmarkIds = $validated['bookmark_ids'];
 
         // Verify all bookmarks exist and belong to this list
-        $bookmarks = Bookmark::where('bookmark_list_id', $list->id)
+        $bookmarks = Bookmark::query()->where('bookmark_list_id', $list->id)
             ->whereIn('id', $bookmarkIds)
             ->get()
             ->keyBy('id');
 
         $missingIds = array_diff($bookmarkIds, $bookmarks->keys()->toArray());
-        if (! empty($missingIds)) {
+        if ($missingIds !== []) {
             return Response::error(
                 'Some bookmark IDs were not found in this list: '.implode(', ', $missingIds)
             );
@@ -67,11 +70,11 @@ class ReorderBookmarksTool extends Tool
         return Response::structured([
             'message' => 'Bookmarks reordered successfully.',
             'list_id' => $list->id,
-            'new_order' => collect($bookmarkIds)->map(fn ($id, $index) => [
+            'new_order' => collect($bookmarkIds)->map(fn ($id, $index): array => [
                 'bookmark_id' => $id,
                 'position' => $index + 1,
                 'title' => $bookmarks[$id]->title,
-            ])->values()->toArray(),
+            ])->values()->all(),
         ]);
     }
 

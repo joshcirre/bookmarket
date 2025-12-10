@@ -37,15 +37,19 @@ class CreateBookmarkTool extends Tool
             'title.required' => 'You must provide a title for the bookmark.',
         ]);
 
+        /** @var \App\Models\User $user */
         $user = $request->user();
-        $list = BookmarkList::where('user_id', $user->id)
-            ->find($validated['list_id']);
+
+        /** @var BookmarkList|null $list */
+        $list = BookmarkList::query()->where('user_id', $user->id)
+            ->where('id', $validated['list_id'])
+            ->first();
 
         if (! $list) {
             return Response::error('List not found. Make sure the list_id belongs to your account.');
         }
 
-        $bookmark = Bookmark::create([
+        $bookmark = Bookmark::query()->create([
             'bookmark_list_id' => $list->id,
             'user_id' => $user->id,
             'url' => $validated['url'],
@@ -65,7 +69,7 @@ class CreateBookmarkTool extends Tool
                 'notes' => $bookmark->notes,
                 'domain' => $bookmark->domain,
                 'position' => $bookmark->position,
-                'created_at' => $bookmark->created_at->toIso8601String(),
+                'created_at' => $bookmark->created_at?->toIso8601String(),
             ],
         ]);
     }

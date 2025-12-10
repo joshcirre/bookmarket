@@ -32,18 +32,19 @@ class SearchBookmarksTool extends Tool
             'query.min' => 'The search query must be at least 2 characters.',
         ]);
 
+        /** @var \App\Models\User $user */
         $user = $request->user();
         $query = $validated['query'];
         $limit = $validated['limit'] ?? 25;
 
         $bookmarksQuery = Bookmark::with(['bookmarkList', 'tags'])
             ->where('user_id', $user->id)
-            ->where(function ($q) use ($query) {
-                $q->where('title', 'like', "%{$query}%")
-                    ->orWhere('url', 'like', "%{$query}%")
-                    ->orWhere('description', 'like', "%{$query}%")
-                    ->orWhere('domain', 'like', "%{$query}%")
-                    ->orWhere('notes', 'like', "%{$query}%");
+            ->where(function ($q) use ($query): void {
+                $q->where('title', 'like', sprintf('%%%s%%', $query))
+                    ->orWhere('url', 'like', sprintf('%%%s%%', $query))
+                    ->orWhere('description', 'like', sprintf('%%%s%%', $query))
+                    ->orWhere('domain', 'like', sprintf('%%%s%%', $query))
+                    ->orWhere('notes', 'like', sprintf('%%%s%%', $query));
             });
 
         // Optionally filter by list
@@ -51,27 +52,26 @@ class SearchBookmarksTool extends Tool
             $bookmarksQuery->where('bookmark_list_id', $validated['list_id']);
         }
 
-        $bookmarks = $bookmarksQuery
-            ->orderBy('created_at', 'desc')
+        $bookmarks = $bookmarksQuery->latest()
             ->limit($limit)
             ->get();
 
         return Response::structured([
             'query' => $query,
             'results_count' => $bookmarks->count(),
-            'bookmarks' => $bookmarks->map(fn ($b) => [
+            'bookmarks' => $bookmarks->map(fn ($b): array => [
                 'id' => $b->id,
                 'title' => $b->title,
                 'url' => $b->url,
                 'description' => $b->description,
                 'domain' => $b->domain,
                 'list' => [
-                    'id' => $b->bookmarkList->id,
-                    'title' => $b->bookmarkList->title,
+                    'id' => $b->bookmarkList?->id,
+                    'title' => $b->bookmarkList?->title,
                 ],
                 'tags' => $b->tags->pluck('name')->toArray(),
-                'created_at' => $b->created_at->toIso8601String(),
-            ])->toArray(),
+                'created_at' => $b->created_at?->toIso8601String(),
+            ])->all(),
         ]);
     }
 

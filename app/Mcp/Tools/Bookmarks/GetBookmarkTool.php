@@ -29,10 +29,14 @@ class GetBookmarkTool extends Tool
             'bookmark_id.required' => 'You must provide a bookmark_id.',
         ]);
 
+        /** @var \App\Models\User $user */
         $user = $request->user();
+
+        /** @var Bookmark|null $bookmark */
         $bookmark = Bookmark::with('tags', 'bookmarkList')
             ->where('user_id', $user->id)
-            ->find($validated['bookmark_id']);
+            ->where('id', $validated['bookmark_id'])
+            ->first();
 
         if (! $bookmark) {
             return Response::error('Bookmark not found. Make sure the bookmark_id belongs to your account.');
@@ -42,7 +46,7 @@ class GetBookmarkTool extends Tool
             'bookmark' => [
                 'id' => $bookmark->id,
                 'list_id' => $bookmark->bookmark_list_id,
-                'list_title' => $bookmark->bookmarkList->title,
+                'list_title' => $bookmark->bookmarkList?->title,
                 'url' => $bookmark->url,
                 'title' => $bookmark->title,
                 'description' => $bookmark->description,
@@ -51,8 +55,8 @@ class GetBookmarkTool extends Tool
                 'favicon_url' => $bookmark->favicon_url,
                 'position' => $bookmark->position,
                 'tags' => $bookmark->tags->pluck('name')->toArray(),
-                'created_at' => $bookmark->created_at->toIso8601String(),
-                'updated_at' => $bookmark->updated_at->toIso8601String(),
+                'created_at' => $bookmark->created_at?->toIso8601String(),
+                'updated_at' => $bookmark->updated_at?->toIso8601String(),
             ],
         ]);
     }

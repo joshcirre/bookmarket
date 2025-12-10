@@ -24,12 +24,13 @@ class ListTagsTool extends Tool
      */
     public function handle(Request $request): Response|ResponseFactory
     {
+        /** @var \App\Models\User $user */
         $user = $request->user();
 
         // Get all tags that are attached to the user's bookmarks
         $tags = DB::table('tags')
             ->join('taggables', 'tags.id', '=', 'taggables.tag_id')
-            ->join('bookmarks', function ($join) use ($user) {
+            ->join('bookmarks', function ($join) use ($user): void {
                 $join->on('taggables.taggable_id', '=', 'bookmarks.id')
                     ->where('taggables.taggable_type', '=', Bookmark::class)
                     ->where('bookmarks.user_id', '=', $user->id);
@@ -40,12 +41,12 @@ class ListTagsTool extends Tool
             ->get();
 
         return Response::structured([
-            'tags' => $tags->map(fn ($tag) => [
+            'tags' => $tags->map(fn ($tag): array => [
                 'id' => $tag->id,
                 'name' => $tag->name,
                 'slug' => $tag->slug,
                 'bookmarks_count' => $tag->bookmarks_count,
-            ])->toArray(),
+            ])->all(),
             'total' => $tags->count(),
         ]);
     }

@@ -199,7 +199,7 @@ test('sync_bookmark_tags reuses existing tags', function (): void {
     $bookmark = Bookmark::factory()->for($list)->for($user)->create();
 
     $existingTag = Tag::findOrCreateByName('existing');
-    $tagCountBefore = Tag::count();
+    $tagCountBefore = Tag::query()->count();
 
     $response = BookmarketServer::actingAs($user)
         ->tool(SyncBookmarkTagsTool::class, [
@@ -210,6 +210,6 @@ test('sync_bookmark_tags reuses existing tags', function (): void {
     $response->assertOk();
 
     // Should not create a duplicate tag
-    expect(Tag::count())->toBe($tagCountBefore);
+    expect(Tag::query()->count())->toBe($tagCountBefore);
     expect($bookmark->fresh()->tags->first()->id)->toBe($existingTag->id);
 });

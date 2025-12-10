@@ -32,18 +32,23 @@ class MoveBookmarkTool extends Tool
             'target_list_id.required' => 'You must provide a target_list_id for the destination list.',
         ]);
 
+        /** @var \App\Models\User $user */
         $user = $request->user();
 
+        /** @var Bookmark|null $bookmark */
         $bookmark = Bookmark::with('bookmarkList')
             ->where('user_id', $user->id)
-            ->find($validated['bookmark_id']);
+            ->where('id', $validated['bookmark_id'])
+            ->first();
 
         if (! $bookmark) {
             return Response::error('Bookmark not found. Make sure the bookmark_id belongs to your account.');
         }
 
-        $targetList = BookmarkList::where('user_id', $user->id)
-            ->find($validated['target_list_id']);
+        /** @var BookmarkList|null $targetList */
+        $targetList = BookmarkList::query()->where('user_id', $user->id)
+            ->where('id', $validated['target_list_id'])
+            ->first();
 
         if (! $targetList) {
             return Response::error('Target list not found. Make sure the target_list_id belongs to your account.');
@@ -61,7 +66,7 @@ class MoveBookmarkTool extends Tool
         $targetList->increment('bookmarks_count');
 
         // Calculate new position in target list
-        $maxPosition = Bookmark::where('bookmark_list_id', $targetList->id)->max('position') ?? 0;
+        $maxPosition = Bookmark::query()->where('bookmark_list_id', $targetList->id)->max('position') ?? 0;
 
         $bookmark->update([
             'bookmark_list_id' => $targetList->id,
@@ -69,7 +74,7 @@ class MoveBookmarkTool extends Tool
         ]);
 
         return Response::structured([
-            'message' => "Bookmark moved from \"{$sourceListTitle}\" to \"{$targetList->title}\".",
+            'message' => sprintf('Bookmark moved from "%s" to "%s".', $sourceListTitle, $targetList->title),
             'bookmark' => [
                 'id' => $bookmark->id,
                 'title' => $bookmark->title,

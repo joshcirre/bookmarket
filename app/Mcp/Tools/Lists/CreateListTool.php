@@ -35,9 +35,10 @@ class CreateListTool extends Tool
             'description.max' => 'The description cannot exceed 1000 characters.',
         ]);
 
+        /** @var \App\Models\User $user */
         $user = $request->user();
 
-        $list = BookmarkList::create([
+        $list = BookmarkList::query()->create([
             'user_id' => $user->id,
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -53,7 +54,7 @@ class CreateListTool extends Tool
                 'description' => $list->description,
                 'visibility' => $list->visibility->value,
                 'bookmarks_count' => 0,
-                'created_at' => $list->created_at->toIso8601String(),
+                'created_at' => $list->created_at?->toIso8601String(),
             ],
         ]);
     }

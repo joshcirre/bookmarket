@@ -33,7 +33,7 @@ class VerifyWorkOsJwt
             $decoded = JWT::decode($token, $keys);
 
             // Attach user to request based on WorkOS user ID (sub claim)
-            $user = User::where('workos_id', $decoded->sub)->first();
+            $user = User::query()->where('workos_id', $decoded->sub)->first();
 
             if (! $user) {
                 return $this->unauthorizedResponse('User not found');
@@ -42,7 +42,7 @@ class VerifyWorkOsJwt
             $request->setUserResolver(fn () => $user);
 
             return $next($request);
-        } catch (\Exception $e) {
+        } catch (\Exception) {
             return $this->unauthorizedResponse('Invalid token');
         }
     }
@@ -54,14 +54,16 @@ class VerifyWorkOsJwt
      */
     protected function getJwks(): array
     {
+        /** @var array{keys: array<int, array<string, mixed>>} $jwks */
         $jwks = Cache::remember('workos_jwks', 3600, function (): array {
-            $jwksUri = config('services.workos.authkit_domain').'/sso/jwks';
+            /** @var string $authkitDomain */
+            $authkitDomain = config('services.workos.authkit_domain');
+            $jwksUri = $authkitDomain.'/sso/jwks';
             $response = file_get_contents($jwksUri);
 
-            if ($response === false) {
-                throw new \RuntimeException('Failed to fetch JWKS from WorkOS');
-            }
+            throw_if($response === false, \RuntimeException::class, 'Failed to fetch JWKS from WorkOS');
 
+            /** @var array{keys: array<int, array<string, mixed>>} */
             return json_decode($response, true);
         });
 

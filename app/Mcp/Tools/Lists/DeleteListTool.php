@@ -32,9 +32,13 @@ class DeleteListTool extends Tool
             'confirm.accepted' => 'You must confirm the deletion by setting confirm to true.',
         ]);
 
+        /** @var \App\Models\User $user */
         $user = $request->user();
-        $list = BookmarkList::where('user_id', $user->id)
-            ->find($validated['list_id']);
+
+        /** @var BookmarkList|null $list */
+        $list = BookmarkList::query()->where('user_id', $user->id)
+            ->where('id', $validated['list_id'])
+            ->first();
 
         if (! $list) {
             return Response::error('List not found. Make sure the list_id belongs to your account.');
@@ -50,7 +54,7 @@ class DeleteListTool extends Tool
         $list->delete();
 
         return Response::structured([
-            'message' => "List \"{$title}\" and its {$bookmarksCount} bookmark(s) have been deleted.",
+            'message' => sprintf('List "%s" and its %s bookmark(s) have been deleted.', $title, $bookmarksCount),
             'deleted' => [
                 'list_id' => $validated['list_id'],
                 'title' => $title,

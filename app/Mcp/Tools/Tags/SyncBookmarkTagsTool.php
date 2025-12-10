@@ -34,10 +34,13 @@ class SyncBookmarkTagsTool extends Tool
             'tags.*.max' => 'Each tag name cannot exceed 50 characters.',
         ]);
 
+        /** @var \App\Models\User $user */
         $user = $request->user();
 
-        $bookmark = Bookmark::where('user_id', $user->id)
-            ->find($validated['bookmark_id']);
+        /** @var Bookmark|null $bookmark */
+        $bookmark = Bookmark::query()->where('user_id', $user->id)
+            ->where('id', $validated['bookmark_id'])
+            ->first();
 
         if (! $bookmark) {
             return Response::error('Bookmark not found. Make sure the bookmark_id belongs to your account.');
@@ -45,7 +48,7 @@ class SyncBookmarkTagsTool extends Tool
 
         // Find or create each tag and collect their IDs
         $tagIds = collect($validated['tags'])
-            ->map(fn ($name) => Tag::findOrCreateByName(trim($name)))
+            ->map(fn ($name): \App\Models\Tag => Tag::findOrCreateByName(trim((string) $name)))
             ->pluck('id')
             ->toArray();
 
@@ -60,7 +63,7 @@ class SyncBookmarkTagsTool extends Tool
             'bookmark' => [
                 'id' => $bookmark->id,
                 'title' => $bookmark->title,
-                'tags' => $bookmark->tags->map(fn ($tag) => [
+                'tags' => $bookmark->tags->map(fn ($tag): array => [
                     'id' => $tag->id,
                     'name' => $tag->name,
                     'slug' => $tag->slug,

@@ -34,9 +34,13 @@ class UpdateBookmarkTool extends Tool
             'url.url' => 'The URL must be a valid URL.',
         ]);
 
+        /** @var \App\Models\User $user */
         $user = $request->user();
-        $bookmark = Bookmark::where('user_id', $user->id)
-            ->find($validated['bookmark_id']);
+
+        /** @var Bookmark|null $bookmark */
+        $bookmark = Bookmark::query()->where('user_id', $user->id)
+            ->where('id', $validated['bookmark_id'])
+            ->first();
 
         if (! $bookmark) {
             return Response::error('Bookmark not found. Make sure the bookmark_id belongs to your account.');
@@ -46,7 +50,7 @@ class UpdateBookmarkTool extends Tool
 
         if (isset($validated['url'])) {
             $updates['url'] = $validated['url'];
-            $updates['domain'] = parse_url($validated['url'], PHP_URL_HOST);
+            $updates['domain'] = parse_url((string) $validated['url'], PHP_URL_HOST);
         }
 
         if (isset($validated['title'])) {
@@ -78,7 +82,7 @@ class UpdateBookmarkTool extends Tool
                 'description' => $bookmark->description,
                 'notes' => $bookmark->notes,
                 'domain' => $bookmark->domain,
-                'updated_at' => $bookmark->updated_at->toIso8601String(),
+                'updated_at' => $bookmark->updated_at?->toIso8601String(),
             ],
         ]);
     }
