@@ -58,7 +58,7 @@ class VerifyWorkOsJwt
         $jwks = Cache::remember('workos_jwks', 3600, function (): array {
             /** @var string $authkitDomain */
             $authkitDomain = config('services.workos.authkit_domain');
-            $jwksUri = $authkitDomain.'/sso/jwks';
+            $jwksUri = $authkitDomain.'/oauth2/jwks';
             $response = file_get_contents($jwksUri);
 
             throw_if($response === false, \RuntimeException::class, 'Failed to fetch JWKS from WorkOS');

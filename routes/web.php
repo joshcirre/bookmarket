@@ -25,7 +25,7 @@ Route::get('/.well-known/oauth-authorization-server/{path?}', function () {
         'token_endpoint' => $authkitDomain.'/oauth2/token',
         'registration_endpoint' => $authkitDomain.'/oauth2/register',
         'userinfo_endpoint' => $authkitDomain.'/oauth2/userinfo',
-        'jwks_uri' => $authkitDomain.'/sso/jwks',
+        'jwks_uri' => $authkitDomain.'/oauth2/jwks',
         'response_types_supported' => ['code'],
         'code_challenge_methods_supported' => ['S256'],
         'grant_types_supported' => ['authorization_code', 'refresh_token'],
