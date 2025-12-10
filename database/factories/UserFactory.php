@@ -17,13 +17,17 @@ class UserFactory extends Factory
      */
     public function definition(): array
     {
+        $name = fake()->name();
+
         return [
-            'name' => fake()->name(),
+            'name' => $name,
+            'username' => fake()->unique()->userName(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'workos_id' => 'fake-'.Str::random(10),
             'remember_token' => Str::random(10),
             'avatar' => '',
+            'bio' => fake()->optional()->sentence(),
         ];
     }
 
@@ -32,7 +36,7 @@ class UserFactory extends Factory
      */
     public function unverified(): static
     {
-        return $this->state(fn (array $attributes) => [
+        return $this->state(fn (array $attributes): array => [
             'email_verified_at' => null,
         ]);
     }

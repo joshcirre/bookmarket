@@ -3,13 +3,13 @@
 use App\Models\User;
 use Livewire\Volt\Volt;
 
-test('profile page is displayed', function () {
+test('profile page is displayed', function (): void {
     $this->actingAs($user = User::factory()->create());
 
     $this->get('/settings/profile')->assertOk();
 });
 
-test('profile information can be updated', function () {
+test('profile information can be updated', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user);
@@ -25,7 +25,7 @@ test('profile information can be updated', function () {
     expect($user->name)->toEqual('Test User');
 });
 
-test('user can delete their account', function () {
+test('user can delete their account', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user);

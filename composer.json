@@ -14,10 +14,15 @@
         "laravel/tinker": "^2.10.1",
         "laravel/workos": "^0.1.0",
         "livewire/flux": "^2.1.1",
-        "livewire/volt": "^1.7.0"
+        "livewire/flux-pro": "^2.9",
+        "livewire/volt": "^1.7.0",
+        "nunomaduro/essentials": "^1.0",
+        "prism-php/prism": "^0.99.0"
     },
     "require-dev": {
+        "driftingly/rector-laravel": "^2.1",
         "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.0",
         "laravel/boost": "^1.8",
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.24",
@@ -52,9 +57,24 @@
             "Composer\\Config::disableProcessTimeout",
             "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite --kill-others"
         ],
-        "test": [
+        "lint": "vendor/bin/pint",
+        "refactor": "vendor/bin/rector",
+        "test:lint": "vendor/bin/pint --test",
+        "test:refactor": "vendor/bin/rector --dry-run",
+        "test:types": "vendor/bin/phpstan analyse --ansi --memory-limit=512M",
+        "test:unit": [
             "@php artisan config:clear --ansi",
-            "@php artisan test"
+            "@php artisan test --ansi"
+        ],
+        "test": [
+            "@test:lint",
+            "@test:refactor",
+            "@test:types",
+            "@test:unit"
+        ],
+        "fix": [
+            "@lint",
+            "@refactor"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
@@ -91,5 +111,10 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": [{
+        "name": "flux-pro",
+        "type": "composer",
+        "url": "https://composer.fluxui.dev"
+    }]
 }

@@ -1,0 +1,403 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Call to an undefined method GuzzleHttp\\Promise\\PromiseInterface\|Illuminate\\Http\\Client\\Response\:\:body\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Jobs/FetchBookmarkMetadata.php
+
+		-
+			message: '#^Call to an undefined method GuzzleHttp\\Promise\\PromiseInterface\|Illuminate\\Http\\Client\\Response\:\:successful\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Jobs/FetchBookmarkMetadata.php
+
+		-
+			message: '#^Binary operation "\+" between mixed and 1 results in an error\.$#'
+			identifier: binaryOp.invalid
+			count: 1
+			path: app/Models/Bookmark.php
+
+		-
+			message: '#^Cannot call method decrement\(\) on Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Models/Bookmark.php
+
+		-
+			message: '#^Cannot call method increment\(\) on Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Models/Bookmark.php
+
+		-
+			message: '#^Method App\\Models\\Bookmark\:\:bookmarkList\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/Bookmark.php
+
+		-
+			message: '#^Method App\\Models\\Bookmark\:\:tags\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\MorphToMany does not specify its types\: TRelatedModel, TDeclaringModel, TPivotModel, TAccessor \(2\-4 required\)$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/Bookmark.php
+
+		-
+			message: '#^Method App\\Models\\Bookmark\:\:user\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/Bookmark.php
+
+		-
+			message: '#^Property App\\Models\\Bookmark\:\:\$domain \(string\|null\) does not accept string\|false\|null\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Models/Bookmark.php
+
+		-
+			message: '#^Property App\\Models\\Bookmark\:\:\$position \(int\<0, max\>\) does not accept \(float\|int\)\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Models/Bookmark.php
+
+		-
+			message: '#^Cannot access property \$username on Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: property.nonObject
+			count: 1
+			path: app/Models/BookmarkList.php
+
+		-
+			message: '#^Method App\\Models\\BookmarkList\:\:bookmarks\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/BookmarkList.php
+
+		-
+			message: '#^Method App\\Models\\BookmarkList\:\:user\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/BookmarkList.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between string and App\\Enums\\ListVisibility\:\:Private will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Models/BookmarkList.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between string and App\\Enums\\ListVisibility\:\:Public will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Models/BookmarkList.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between string and App\\Enums\\ListVisibility\:\:Unlisted will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Models/BookmarkList.php
+
+		-
+			message: '#^Method App\\Models\\Tag\:\:bookmarks\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\MorphToMany does not specify its types\: TRelatedModel, TDeclaringModel, TPivotModel, TAccessor \(2\-4 required\)$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/Tag.php
+
+		-
+			message: '#^Class App\\Models\\User uses generic trait Illuminate\\Database\\Eloquent\\Factories\\HasFactory but does not specify its types\: TFactory$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^Method App\\Models\\User\:\:bookmarkLists\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^Method App\\Models\\User\:\:publicBookmarkLists\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between string and App\\Enums\\ListVisibility\:\:Private will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Policies/BookmarkListPolicy.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: app/Policies/BookmarkListPolicy.php
+
+		-
+			message: '#^Cannot access property \$user_id on Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: property.nonObject
+			count: 2
+			path: app/Policies/BookmarkPolicy.php
+
+		-
+			message: '#^Parameter \#2 \$bookmarkList of method App\\Policies\\BookmarkListPolicy\:\:view\(\) expects App\\Models\\BookmarkList, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Policies/BookmarkPolicy.php
+
+		-
+			message: '#^Access to an undefined property object\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: database/migrations/2025_12_10_064444_add_username_to_users_table.php
+
+		-
+			message: '#^Access to an undefined property object\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: database/migrations/2025_12_10_064444_add_username_to_users_table.php
+
+		-
+			message: '#^Parameter \#1 \$title of static method Illuminate\\Support\\Str\:\:slug\(\) expects string, mixed given\.$#'
+			identifier: argument.type
+			count: 1
+			path: database/migrations/2025_12_10_064444_add_username_to_users_table.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:actingAs\(\)\.$#'
+			identifier: method.notFound
+			count: 8
+			path: tests/Feature/Bookmarks/CreateBookmarkTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:assertDatabaseHas\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: tests/Feature/Bookmarks/CreateBookmarkTest.php
+
+		-
+			message: '#^Cannot access property \$bookmarks_count on App\\Models\\BookmarkList\|null\.$#'
+			identifier: property.nonObject
+			count: 1
+			path: tests/Feature/Bookmarks/CreateBookmarkTest.php
+
+		-
+			message: '#^Cannot access property \$domain on App\\Models\\Bookmark\|null\.$#'
+			identifier: property.nonObject
+			count: 1
+			path: tests/Feature/Bookmarks/CreateBookmarkTest.php
+
+		-
+			message: '#^Cannot access property \$position on Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: property.nonObject
+			count: 2
+			path: tests/Feature/Bookmarks/CreateBookmarkTest.php
+
+		-
+			message: '#^Cannot access property \$tags on App\\Models\\Bookmark\|null\.$#'
+			identifier: property.nonObject
+			count: 1
+			path: tests/Feature/Bookmarks/CreateBookmarkTest.php
+
+		-
+			message: '#^Unable to resolve the template type TValue in call to function expect$#'
+			identifier: argument.templateType
+			count: 2
+			path: tests/Feature/Bookmarks/CreateBookmarkTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:actingAs\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: tests/Feature/DashboardTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: tests/Feature/DashboardTest.php
+
+		-
+			message: '#^Cannot call method assertOk\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Feature/DashboardTest.php
+
+		-
+			message: '#^Cannot call method assertRedirect\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Feature/DashboardTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: tests/Feature/ExampleTest.php
+
+		-
+			message: '#^Cannot call method assertStatus\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Feature/ExampleTest.php
+
+		-
+			message: '#^Access to an undefined property Pest\\Expectation\<App\\Models\\BookmarkList\|null\>\:\:\$visibility\.$#'
+			identifier: property.notFound
+			count: 1
+			path: tests/Feature/Lists/CreateListTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:actingAs\(\)\.$#'
+			identifier: method.notFound
+			count: 6
+			path: tests/Feature/Lists/CreateListTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:assertDatabaseHas\(\)\.$#'
+			identifier: method.notFound
+			count: 3
+			path: tests/Feature/Lists/CreateListTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: tests/Feature/Lists/CreateListTest.php
+
+		-
+			message: '#^Cannot access property \$user_id on mixed\.$#'
+			identifier: property.nonObject
+			count: 1
+			path: tests/Feature/Lists/CreateListTest.php
+
+		-
+			message: '#^Cannot call method assertOk\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Feature/Lists/CreateListTest.php
+
+		-
+			message: '#^Cannot call method assertRedirect\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: tests/Feature/Lists/CreateListTest.php
+
+		-
+			message: '#^Cannot call method get\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Feature/Lists/CreateListTest.php
+
+		-
+			message: '#^Cannot call method toBe\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: tests/Feature/Lists/CreateListTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:actingAs\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: tests/Feature/Lists/ListVisibilityTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 5
+			path: tests/Feature/Lists/ListVisibilityTest.php
+
+		-
+			message: '#^Cannot call method assertDontSee\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: tests/Feature/Lists/ListVisibilityTest.php
+
+		-
+			message: '#^Cannot call method assertForbidden\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Feature/Lists/ListVisibilityTest.php
+
+		-
+			message: '#^Cannot call method assertNotFound\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Feature/Lists/ListVisibilityTest.php
+
+		-
+			message: '#^Cannot call method assertOk\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 4
+			path: tests/Feature/Lists/ListVisibilityTest.php
+
+		-
+			message: '#^Cannot call method assertSee\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 3
+			path: tests/Feature/Lists/ListVisibilityTest.php
+
+		-
+			message: '#^Cannot call method get\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Feature/Lists/ListVisibilityTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 6
+			path: tests/Feature/Profile/PublicProfileTest.php
+
+		-
+			message: '#^Cannot call method assertDontSee\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: tests/Feature/Profile/PublicProfileTest.php
+
+		-
+			message: '#^Cannot call method assertNotFound\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: tests/Feature/Profile/PublicProfileTest.php
+
+		-
+			message: '#^Cannot call method assertOk\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 4
+			path: tests/Feature/Profile/PublicProfileTest.php
+
+		-
+			message: '#^Cannot call method assertSee\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 6
+			path: tests/Feature/Profile/PublicProfileTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:actingAs\(\)\.$#'
+			identifier: method.notFound
+			count: 3
+			path: tests/Feature/Settings/ProfileUpdateTest.php
+
+		-
+			message: '#^Call to an undefined method PHPUnit\\Framework\\TestCase\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: tests/Feature/Settings/ProfileUpdateTest.php
+
+		-
+			message: '#^Cannot call method assertOk\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Feature/Settings/ProfileUpdateTest.php
+
+		-
+			message: '#^Cannot call method toBe\(\) on mixed\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Pest.php
+
+		-
+			message: '#^Undefined variable\: \$this$#'
+			identifier: variable.undefined
+			count: 1
+			path: tests/Pest.php

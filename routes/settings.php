@@ -7,7 +7,7 @@ use Livewire\Volt\Volt;
 Route::middleware([
     'auth',
     ValidateSessionWithWorkOS::class,
-])->group(function () {
+])->group(function (): void {
     Route::redirect('settings', 'settings/profile');
 
     Volt::route('settings/profile', 'settings.profile')->name('settings.profile');

@@ -5,14 +5,8 @@ use Laravel\WorkOS\Http\Requests\AuthKitAuthenticationRequest;
 use Laravel\WorkOS\Http\Requests\AuthKitLoginRequest;
 use Laravel\WorkOS\Http\Requests\AuthKitLogoutRequest;
 
-Route::get('login', function (AuthKitLoginRequest $request) {
-    return $request->redirect();
-})->middleware(['guest'])->name('login');
+Route::get('login', fn (AuthKitLoginRequest $request): \Symfony\Component\HttpFoundation\Response => $request->redirect())->middleware(['guest'])->name('login');
 
-Route::get('authenticate', function (AuthKitAuthenticationRequest $request) {
-    return tap(to_route('dashboard'), fn () => $request->authenticate());
-})->middleware(['guest']);
+Route::get('authenticate', fn (AuthKitAuthenticationRequest $request) => tap(to_route('dashboard'), fn (): mixed => $request->authenticate()))->middleware(['guest']);
 
-Route::post('logout', function (AuthKitLogoutRequest $request) {
-    return $request->logout();
-})->middleware(['auth'])->name('logout');
+Route::post('logout', fn (AuthKitLogoutRequest $request): \Symfony\Component\HttpFoundation\Response => $request->logout())->middleware(['auth'])->name('logout');
