@@ -7,11 +7,28 @@ use Livewire\Volt\Volt;
 Route::get('/', fn (): \Illuminate\Contracts\View\Factory|\Illuminate\Contracts\View\View => view('welcome'));
 
 // OAuth Protected Resource Metadata (MCP spec)
-Route::get('/.well-known/oauth-protected-resource', fn () => response()->json([
+Route::get('/.well-known/oauth-protected-resource/{path?}', fn () => response()->json([
     'resource' => config('app.url'),
     'authorization_servers' => [config('services.workos.authkit_domain')],
     'bearer_methods_supported' => ['header'],
-]));
+]))->where('path', '.*');
+
+// OAuth Authorization Server Metadata - proxy to WorkOS AuthKit
+Route::get('/.well-known/oauth-authorization-server/{path?}', function () {
+    $authkitDomain = config('services.workos.authkit_domain');
+
+    return response()->json([
+        'issuer' => $authkitDomain,
+        'authorization_endpoint' => $authkitDomain.'/oauth2/authorize',
+        'token_endpoint' => $authkitDomain.'/oauth2/token',
+        'registration_endpoint' => $authkitDomain.'/oauth2/register',
+        'userinfo_endpoint' => $authkitDomain.'/oauth2/userinfo',
+        'jwks_uri' => $authkitDomain.'/sso/jwks',
+        'response_types_supported' => ['code'],
+        'code_challenge_methods_supported' => ['S256'],
+        'grant_types_supported' => ['authorization_code', 'refresh_token'],
+    ]);
+})->where('path', '.*');
 
 Route::middleware([
     'auth',
