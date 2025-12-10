@@ -50,6 +50,23 @@ Mcp::web('/mcp', BookmarketServer::class)
 
 ## Honest Comparison
 
+### Setup Time
+
+| Approach | If everything goes right | Realistically |
+|----------|-------------------------|---------------|
+| Passport | ~5 minutes | ~10 minutes |
+| WorkOS-only | ~15 minutes | 30+ minutes |
+
+**Passport is faster to set up.** It's designed for this exact use case - just `composer require`, `passport:install`, add a trait, and you're done.
+
+**WorkOS-only has more gotchas.** During our implementation, we hit several issues:
+- JWKS endpoint is `/oauth2/jwks`, not `/sso/jwks` (returns 404)
+- Route names must match what Laravel MCP expects (`mcp.oauth.protected-resource`)
+- Must use `Auth::setUser()` not `$request->setUserResolver()` for MCP compatibility
+- Debugging involves two systems (your app + WorkOS)
+
+The WorkOS-only benefit is **ongoing simplicity** (one auth system, no extra tables), not faster initial setup.
+
 ### What's the SAME with Both Approaches
 
 **User identity is the same either way.** With Passport, the flow is:
@@ -298,10 +315,20 @@ claude mcp add bookmarket-passport --transport http https://your-app.com/mcp/pas
 
 ## Key Takeaway
 
-> "Both approaches work well. The choice comes down to: Do you want the simplicity of one auth system (WorkOS only), or do you want better token visibility and Laravel-native MCP support (Passport)?"
+> "Passport is the faster, easier setup. WorkOS-only is more work upfront but gives you ongoing simplicity - one auth system instead of two."
 
-**Choose WorkOS only if:** You value simplicity and are already all-in on WorkOS.
+**Choose Passport if:**
+- You want the quickest path to working MCP auth (~5-10 min)
+- You want to see exactly which users have authorized which AI agents
+- You want easy token revocation via database
+- You're comfortable with 5+ extra database tables
 
-**Choose Passport if:** You want to see exactly which users have authorized which AI agents, with easy revocation.
+**Choose WorkOS only if:**
+- You're already all-in on WorkOS and want one auth system
+- You don't need token visibility/revocation features
+- You prefer no extra database tables
+- You're okay with a longer initial setup
 
-For this app, we chose WorkOS because we're already using it for web auth and wanted to keep things simple. But Passport is a completely valid choice - and we've included it at `/mcp/passport` so you can see both in action.
+**Both approaches use the same WorkOS GitHub login** - users don't see a difference. The question is whether you want Passport managing MCP tokens (more visibility, more tables) or WorkOS managing everything (simpler, less visibility).
+
+For this app, we implemented both at `/mcp` (WorkOS) and `/mcp/passport` (Passport) so you can compare them side-by-side.
