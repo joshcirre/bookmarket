@@ -5,5 +5,5 @@ use Laravel\Mcp\Facades\Mcp;
 
 // Bookmarket MCP server with WorkOS JWT authentication
 // No Mcp::oauthRoutes() needed - WorkOS AuthKit is our OAuth server
-Mcp::web('/mcp/bookmarket', BookmarketServer::class)
+Mcp::web('/mcp', BookmarketServer::class)
     ->middleware('workos.jwt');
