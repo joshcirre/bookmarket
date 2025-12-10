@@ -1,0 +1,62 @@
+<?php
+
+namespace App\Mcp\Tools\Tags;
+
+use App\Models\Bookmark;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Facades\DB;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\ResponseFactory;
+use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
+
+#[IsReadOnly]
+class ListTagsTool extends Tool
+{
+    /**
+     * The tool's description.
+     */
+    protected string $description = 'List all tags used by the authenticated user, with bookmark counts.';
+
+    /**
+     * Handle the tool request.
+     */
+    public function handle(Request $request): Response|ResponseFactory
+    {
+        $user = $request->user();
+
+        // Get all tags that are attached to the user's bookmarks
+        $tags = DB::table('tags')
+            ->join('taggables', 'tags.id', '=', 'taggables.tag_id')
+            ->join('bookmarks', function ($join) use ($user) {
+                $join->on('taggables.taggable_id', '=', 'bookmarks.id')
+                    ->where('taggables.taggable_type', '=', Bookmark::class)
+                    ->where('bookmarks.user_id', '=', $user->id);
+            })
+            ->select('tags.id', 'tags.name', 'tags.slug', DB::raw('COUNT(*) as bookmarks_count'))
+            ->groupBy('tags.id', 'tags.name', 'tags.slug')
+            ->orderBy('bookmarks_count', 'desc')
+            ->get();
+
+        return Response::structured([
+            'tags' => $tags->map(fn ($tag) => [
+                'id' => $tag->id,
+                'name' => $tag->name,
+                'slug' => $tag->slug,
+                'bookmarks_count' => $tag->bookmarks_count,
+            ])->toArray(),
+            'total' => $tags->count(),
+        ]);
+    }
+
+    /**
+     * Get the tool's input schema.
+     *
+     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [];
+    }
+}

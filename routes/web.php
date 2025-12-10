@@ -6,6 +6,13 @@ use Livewire\Volt\Volt;
 
 Route::get('/', fn (): \Illuminate\Contracts\View\Factory|\Illuminate\Contracts\View\View => view('welcome'));
 
+// OAuth Protected Resource Metadata (MCP spec)
+Route::get('/.well-known/oauth-protected-resource', fn () => response()->json([
+    'resource' => config('app.url'),
+    'authorization_servers' => [config('services.workos.authkit_domain')],
+    'bearer_methods_supported' => ['header'],
+]));
+
 Route::middleware([
     'auth',
     ValidateSessionWithWorkOS::class,

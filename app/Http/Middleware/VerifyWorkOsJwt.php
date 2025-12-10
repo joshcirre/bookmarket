@@ -1,0 +1,82 @@
+<?php
+
+namespace App\Http\Middleware;
+
+use App\Models\User;
+use Closure;
+use Firebase\JWT\JWK;
+use Firebase\JWT\JWT;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Symfony\Component\HttpFoundation\Response;
+
+class VerifyWorkOsJwt
+{
+    /**
+     * Handle an incoming request.
+     *
+     * Validates JWT tokens issued by WorkOS AuthKit and attaches
+     * the authenticated user to the request.
+     *
+     * @param  Closure(Request): Response  $next
+     */
+    public function handle(Request $request, Closure $next): Response
+    {
+        $token = $request->bearerToken();
+
+        if (! $token) {
+            return $this->unauthorizedResponse('No token provided');
+        }
+
+        try {
+            $keys = $this->getJwks();
+            $decoded = JWT::decode($token, $keys);
+
+            // Attach user to request based on WorkOS user ID (sub claim)
+            $user = User::where('workos_id', $decoded->sub)->first();
+
+            if (! $user) {
+                return $this->unauthorizedResponse('User not found');
+            }
+
+            $request->setUserResolver(fn () => $user);
+
+            return $next($request);
+        } catch (\Exception $e) {
+            return $this->unauthorizedResponse('Invalid token');
+        }
+    }
+
+    /**
+     * Get the JWKS keys from WorkOS, with caching.
+     *
+     * @return array<string, \Firebase\JWT\Key>
+     */
+    protected function getJwks(): array
+    {
+        $jwks = Cache::remember('workos_jwks', 3600, function (): array {
+            $jwksUri = config('services.workos.authkit_domain').'/sso/jwks';
+            $response = file_get_contents($jwksUri);
+
+            if ($response === false) {
+                throw new \RuntimeException('Failed to fetch JWKS from WorkOS');
+            }
+
+            return json_decode($response, true);
+        });
+
+        return JWK::parseKeySet($jwks);
+    }
+
+    /**
+     * Return an unauthorized response with OAuth metadata header.
+     */
+    protected function unauthorizedResponse(string $error): Response
+    {
+        return response()->json(['error' => $error], 401)
+            ->header(
+                'WWW-Authenticate',
+                'Bearer error="unauthorized", resource_metadata="'.url('/.well-known/oauth-protected-resource').'"'
+            );
+    }
+}
