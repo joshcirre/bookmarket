@@ -195,7 +195,7 @@ class VerifyWorkOsJwt
         }
 
         $membership = $memberships[0];
-        $roleSlug = $membership->role['slug'] ?? null;
+        $roleSlug = $membership->role?->slug;
 
         Log::info('Found WorkOS organization membership', [
             'membership_id' => $membership->id ?? null,
