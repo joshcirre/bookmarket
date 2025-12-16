@@ -7,11 +7,14 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
-use Laravel\Mcp\Server\Tool;
+use App\Mcp\Tools\RbacTool;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
+/**
+ * Read-only tool - available to all authenticated users by default.
+ */
 #[IsReadOnly]
-class GetBookmarkTool extends Tool
+class GetBookmarkTool extends RbacTool
 {
     /**
      * The tool's description.

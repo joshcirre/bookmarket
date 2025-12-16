@@ -9,11 +9,11 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
-use Laravel\Mcp\Server\Tool;
+use App\Mcp\Tools\RbacTool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[IsIdempotent]
-class CreateBookmarkTool extends Tool
+class CreateBookmarkTool extends RbacTool
 {
     /**
      * The tool's description.

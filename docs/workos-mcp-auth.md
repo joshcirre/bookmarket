@@ -332,3 +332,397 @@ claude mcp add bookmarket-passport --transport http https://your-app.com/mcp/pas
 **Both approaches use the same WorkOS GitHub login** - users don't see a difference. The question is whether you want Passport managing MCP tokens (more visibility, more tables) or WorkOS managing everything (simpler, less visibility).
 
 For this app, we implemented both at `/mcp` (WorkOS) and `/mcp/passport` (Passport) so you can compare them side-by-side.
+
+---
+
+## Advanced: Tool-Level Access Control with WorkOS FGA
+
+Beyond authentication (who can access your MCP server), you may need **authorization** (what tools specific users can use). WorkOS Fine-Grained Authorization (FGA) enables this.
+
+### Why Tool-Level RBAC?
+
+Consider these scenarios:
+
+- **Freemium SaaS**: Free users get `search_bookmarks` and `list_tags`, paid users get all tools
+- **Team Permissions**: Admins can `delete_bookmark`, regular members can only `create_bookmark`
+- **Compliance**: Audit-sensitive tools restricted to specific roles
+- **Beta Features**: New tools rolled out gradually to specific users
+
+### How It Works
+
+WorkOS FGA uses a relationship-based model. You define:
+
+1. **Resource types** (e.g., `mcp_tool`)
+2. **Relations** (e.g., `can_execute`)
+3. **Warrants** - the actual permission grants (e.g., "user X can execute tool Y")
+
+Then, before each tool executes, check if the user has permission.
+
+### WorkOS FGA Schema
+
+Define your authorization model in WorkOS Dashboard → FGA → Schema:
+
+```
+type user
+
+type mcp_tool
+  relation can_execute [user]
+```
+
+### Granting Permissions
+
+Use the WorkOS API to create warrants (permissions):
+
+```bash
+# Grant user permission to execute create_bookmark tool
+curl "https://api.workos.com/fga/v1/warrants" \
+  -X POST \
+  -H "Authorization: Bearer sk_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '[{
+    "op": "create",
+    "resource_type": "mcp_tool",
+    "resource_id": "create-bookmark-tool",
+    "relation": "can_execute",
+    "subject": {
+      "resource_type": "user",
+      "resource_id": "user_01ABC123"
+    }
+  }]'
+```
+
+### Checking Permissions
+
+Before a tool executes, query WorkOS FGA:
+
+```bash
+curl "https://api.workos.com/fga/v1/check" \
+  -X POST \
+  -H "Authorization: Bearer sk_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checks": [{
+      "resource_type": "mcp_tool",
+      "resource_id": "create-bookmark-tool",
+      "relation": "can_execute",
+      "subject": {
+        "resource_type": "user",
+        "resource_id": "user_01ABC123"
+      }
+    }]
+  }'
+```
+
+Response:
+```json
+{
+  "result": "authorized"
+}
+```
+
+### Laravel Implementation
+
+Laravel MCP tools have a `shouldRegister()` method that controls whether a tool appears in the tool list. We leverage this for RBAC:
+
+#### 1. Create a WorkOS FGA Service
+
+`app/Services/WorkOsFga.php`:
+
+```php
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+
+class WorkOsFga
+{
+    /**
+     * Check if a user can execute a specific MCP tool.
+     */
+    public function canExecuteTool(string $userId, string $toolName): bool
+    {
+        // Cache permission checks for 60 seconds to reduce API calls
+        $cacheKey = "fga:tool:{$toolName}:user:{$userId}";
+
+        return Cache::remember($cacheKey, 60, function () use ($userId, $toolName) {
+            $response = Http::withToken(config('services.workos.api_key'))
+                ->post('https://api.workos.com/fga/v1/check', [
+                    'checks' => [[
+                        'resource_type' => 'mcp_tool',
+                        'resource_id' => $toolName,
+                        'relation' => 'can_execute',
+                        'subject' => [
+                            'resource_type' => 'user',
+                            'resource_id' => $userId,
+                        ],
+                    ]],
+                ]);
+
+            if ($response->failed()) {
+                // Log error and fail open or closed based on your security needs
+                report(new \RuntimeException('FGA check failed: ' . $response->body()));
+                return false; // Fail closed - deny if FGA is unavailable
+            }
+
+            return $response->json('result') === 'authorized';
+        });
+    }
+
+    /**
+     * Batch check multiple tools at once (more efficient).
+     *
+     * @param  array<string>  $toolNames
+     * @return array<string, bool>
+     */
+    public function canExecuteTools(string $userId, array $toolNames): array
+    {
+        $checks = array_map(fn ($toolName) => [
+            'resource_type' => 'mcp_tool',
+            'resource_id' => $toolName,
+            'relation' => 'can_execute',
+            'subject' => [
+                'resource_type' => 'user',
+                'resource_id' => $userId,
+            ],
+        ], $toolNames);
+
+        $response = Http::withToken(config('services.workos.api_key'))
+            ->post('https://api.workos.com/fga/v1/check', [
+                'checks' => $checks,
+            ]);
+
+        if ($response->failed()) {
+            return array_fill_keys($toolNames, false);
+        }
+
+        $results = [];
+        foreach ($response->json('results', []) as $index => $result) {
+            $results[$toolNames[$index]] = $result['result'] === 'authorized';
+        }
+
+        return $results;
+    }
+
+    /**
+     * Grant a user permission to execute a tool.
+     */
+    public function grantToolAccess(string $userId, string $toolName): bool
+    {
+        $response = Http::withToken(config('services.workos.api_key'))
+            ->post('https://api.workos.com/fga/v1/warrants', [[
+                'op' => 'create',
+                'resource_type' => 'mcp_tool',
+                'resource_id' => $toolName,
+                'relation' => 'can_execute',
+                'subject' => [
+                    'resource_type' => 'user',
+                    'resource_id' => $userId,
+                ],
+            ]]);
+
+        if ($response->successful()) {
+            Cache::forget("fga:tool:{$toolName}:user:{$userId}");
+        }
+
+        return $response->successful();
+    }
+
+    /**
+     * Revoke a user's permission to execute a tool.
+     */
+    public function revokeToolAccess(string $userId, string $toolName): bool
+    {
+        $response = Http::withToken(config('services.workos.api_key'))
+            ->post('https://api.workos.com/fga/v1/warrants', [[
+                'op' => 'delete',
+                'resource_type' => 'mcp_tool',
+                'resource_id' => $toolName,
+                'relation' => 'can_execute',
+                'subject' => [
+                    'resource_type' => 'user',
+                    'resource_id' => $userId,
+                ],
+            ]]);
+
+        if ($response->successful()) {
+            Cache::forget("fga:tool:{$toolName}:user:{$userId}");
+        }
+
+        return $response->successful();
+    }
+}
+```
+
+#### 2. Add `shouldRegister()` to Your Tools
+
+Each tool can implement `shouldRegister()` to check FGA permissions:
+
+```php
+<?php
+
+namespace App\Mcp\Tools\Bookmarks;
+
+use App\Services\WorkOsFga;
+use Illuminate\Support\Facades\Auth;
+use Laravel\Mcp\Server\Tool;
+
+class CreateBookmarkTool extends Tool
+{
+    protected string $description = 'Create a new bookmark';
+
+    public function shouldRegister(WorkOsFga $fga): bool
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            return false;
+        }
+
+        return $fga->canExecuteTool($user->workos_id, $this->name());
+    }
+
+    public function handle(Request $request): Response
+    {
+        // Tool implementation...
+    }
+}
+```
+
+#### 3. Create a Base Tool Class (Optional)
+
+For consistency, create a base class that all RBAC-enabled tools extend:
+
+```php
+<?php
+
+namespace App\Mcp\Tools;
+
+use App\Services\WorkOsFga;
+use Illuminate\Support\Facades\Auth;
+use Laravel\Mcp\Server\Tool;
+
+abstract class RbacTool extends Tool
+{
+    /**
+     * Whether this tool requires FGA permission checks.
+     * Override to false for tools that should always be available.
+     */
+    protected bool $requiresFgaCheck = true;
+
+    public function shouldRegister(WorkOsFga $fga): bool
+    {
+        if (! $this->requiresFgaCheck) {
+            return true;
+        }
+
+        $user = Auth::user();
+
+        if (! $user || ! $user->workos_id) {
+            return false;
+        }
+
+        return $fga->canExecuteTool($user->workos_id, $this->name());
+    }
+}
+```
+
+Then your tools simply extend `RbacTool`:
+
+```php
+class CreateBookmarkTool extends RbacTool
+{
+    // FGA check happens automatically via shouldRegister()
+}
+
+class ListTagsTool extends RbacTool
+{
+    // This tool is always available
+    protected bool $requiresFgaCheck = false;
+}
+```
+
+### Configuration
+
+Add your WorkOS API key to `config/services.php`:
+
+```php
+'workos' => [
+    'client_id' => env('WORKOS_CLIENT_ID'),
+    'api_key' => env('WORKOS_API_KEY'),
+    'authkit_domain' => env('WORKOS_AUTHKIT_DOMAIN'),
+],
+```
+
+And `.env`:
+
+```
+WORKOS_API_KEY=sk_live_your_api_key
+```
+
+### Setting Up Permissions
+
+You can manage permissions via:
+
+1. **WorkOS Dashboard**: FGA → Warrants → Create
+2. **API calls**: During user signup or plan upgrade
+3. **Admin panel**: Build a UI that calls the FGA service
+
+Example: Grant all tools to a new paid user:
+
+```php
+public function upgradeToPaid(User $user): void
+{
+    $fga = app(WorkOsFga::class);
+    
+    $tools = [
+        'create-bookmark-tool',
+        'delete-bookmark-tool',
+        'create-list-tool',
+        // ... etc
+    ];
+
+    foreach ($tools as $tool) {
+        $fga->grantToolAccess($user->workos_id, $tool);
+    }
+}
+```
+
+### Trade-offs
+
+| Aspect | Without FGA | With FGA |
+|--------|-------------|----------|
+| Setup complexity | Simpler | More complex |
+| API calls | None | 1 per tool (cached) |
+| Granularity | All or nothing | Per-tool control |
+| Cost | Free | WorkOS FGA pricing |
+| User experience | Same tools for everyone | Personalized tool list |
+
+### When to Use FGA
+
+**Use FGA if:**
+- Different users should have access to different tools
+- You have a freemium/tiered pricing model
+- Compliance requires audit trails on who can do what
+- You want to gradually roll out new tools
+
+**Skip FGA if:**
+- All authenticated users should have the same access
+- You're prototyping and don't need granular permissions yet
+- Cost is a concern (FGA has usage-based pricing)
+
+### Alternative: Simple Role-Based Approach
+
+If WorkOS FGA is overkill, you can implement simple RBAC using a `role` column on your users table:
+
+```php
+public function shouldRegister(): bool
+{
+    $user = Auth::user();
+    
+    return $user && in_array($user->role, ['admin', 'paid']);
+}
+```
+
+This is simpler but less flexible than FGA's relationship-based model.
