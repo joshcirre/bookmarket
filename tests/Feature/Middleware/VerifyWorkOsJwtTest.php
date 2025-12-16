@@ -10,59 +10,6 @@ beforeEach(function (): void {
     Cache::flush();
 });
 
-test('getPermissionsForRole returns correct permissions for free-tier', function (): void {
-    $middleware = new VerifyWorkOsJwt;
-
-    $method = new ReflectionMethod($middleware, 'getPermissionsForRole');
-
-    $permissions = $method->invoke($middleware, 'free-tier');
-
-    expect($permissions)->toBe([
-        'bookmarks:read',
-        'lists:read',
-        'tags:read',
-    ]);
-});
-
-test('getPermissionsForRole returns correct permissions for subscriber', function (): void {
-    $middleware = new VerifyWorkOsJwt;
-
-    $method = new ReflectionMethod($middleware, 'getPermissionsForRole');
-
-    $permissions = $method->invoke($middleware, 'subscriber');
-
-    expect($permissions)->toBe([
-        'bookmarks:read',
-        'bookmarks:write',
-        'bookmarks:delete',
-        'lists:read',
-        'lists:write',
-        'lists:delete',
-        'tags:read',
-        'tags:write',
-    ]);
-});
-
-test('getPermissionsForRole returns empty array for unknown role', function (): void {
-    $middleware = new VerifyWorkOsJwt;
-
-    $method = new ReflectionMethod($middleware, 'getPermissionsForRole');
-
-    $permissions = $method->invoke($middleware, 'unknown-role');
-
-    expect($permissions)->toBe([]);
-});
-
-test('getPermissionsForRole returns empty array for null role', function (): void {
-    $middleware = new VerifyWorkOsJwt;
-
-    $method = new ReflectionMethod($middleware, 'getPermissionsForRole');
-
-    $permissions = $method->invoke($middleware, null);
-
-    expect($permissions)->toBe([]);
-});
-
 test('middleware returns 401 when no token provided', function (): void {
     $middleware = new VerifyWorkOsJwt;
 
@@ -101,16 +48,47 @@ test('middleware returns 401 for invalid token', function (): void {
     expect($response->getData()->error)->toBe('Invalid token');
 });
 
-test('cached role is used on subsequent requests', function (): void {
-    // Pre-populate the cache with a role
-    $cacheKey = 'workos_role:user_123:org_456';
+test('cached user role is used on subsequent requests', function (): void {
+    // Pre-populate the cache with role and permissions
+    $cacheKey = 'workos_user_role:user_123:org_456';
     Cache::put($cacheKey, ['free-tier', ['bookmarks:read', 'lists:read', 'tags:read']], 300);
 
     $middleware = new VerifyWorkOsJwt;
-    $method = new ReflectionMethod($middleware, 'fetchRoleFromWorkOs');
+    $method = new ReflectionMethod($middleware, 'fetchRoleAndPermissions');
 
     [$role, $permissions] = $method->invoke($middleware, 'user_123', 'org_456');
 
     expect($role)->toBe('free-tier');
     expect($permissions)->toBe(['bookmarks:read', 'lists:read', 'tags:read']);
+});
+
+test('cached organization roles are used for permission lookup', function (): void {
+    // Pre-populate the cache with organization roles
+    $rolesCacheKey = 'workos_org_roles:org_456';
+    Cache::put($rolesCacheKey, [
+        'free-tier' => ['bookmarks:read', 'lists:read'],
+        'subscriber' => ['bookmarks:read', 'bookmarks:write', 'lists:read', 'lists:write'],
+    ], 3600);
+
+    $middleware = new VerifyWorkOsJwt;
+    $method = new ReflectionMethod($middleware, 'fetchRolePermissions');
+
+    $permissions = $method->invoke($middleware, 'org_456', 'subscriber');
+
+    expect($permissions)->toBe(['bookmarks:read', 'bookmarks:write', 'lists:read', 'lists:write']);
+});
+
+test('returns empty permissions for unknown role', function (): void {
+    // Pre-populate the cache with organization roles
+    $rolesCacheKey = 'workos_org_roles:org_456';
+    Cache::put($rolesCacheKey, [
+        'free-tier' => ['bookmarks:read'],
+    ], 3600);
+
+    $middleware = new VerifyWorkOsJwt;
+    $method = new ReflectionMethod($middleware, 'fetchRolePermissions');
+
+    $permissions = $method->invoke($middleware, 'org_456', 'unknown-role');
+
+    expect($permissions)->toBe([]);
 });

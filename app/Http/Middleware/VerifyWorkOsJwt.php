@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Laravel\WorkOS\WorkOS;
 use Symfony\Component\HttpFoundation\Response;
+use WorkOS\Organizations;
 use WorkOS\UserManagement;
 
 /**
@@ -23,7 +24,10 @@ use WorkOS\UserManagement;
  * To implement RBAC for MCP tools, we:
  * 1. Extract the user (sub) and organization (org_id) from the JWT
  * 2. Fetch the user's role from WorkOS API using their organization membership
- * 3. Map the role to permissions locally
+ * 3. Fetch the role's permissions from WorkOS (cached per organization)
+ *
+ * This makes WorkOS the single source of truth for permissions - changes in the
+ * WorkOS dashboard are automatically reflected without code changes.
  *
  * @see https://workos.com/docs/authkit/mcp
  */
@@ -83,12 +87,12 @@ class VerifyWorkOsJwt
             ]);
 
             // Fetch role and permissions from WorkOS API
-            // MCP OAuth tokens don't include RBAC claims, so we always fetch from API
+            // MCP OAuth tokens don't include RBAC claims, so we fetch from API
             $role = null;
             $permissions = [];
 
             if ($orgId) {
-                [$role, $permissions] = $this->fetchRoleFromWorkOs($workosId, $orgId);
+                [$role, $permissions] = $this->fetchRoleAndPermissions($workosId, $orgId);
             } else {
                 Log::warning('MCP token missing org_id - user has no organization context', [
                     'user_id' => $user->id,
@@ -120,60 +124,39 @@ class VerifyWorkOsJwt
     }
 
     /**
-     * Fetch user's role and permissions from WorkOS API using the SDK.
+     * Fetch user's role and permissions from WorkOS API.
      *
-     * Since MCP OAuth tokens don't include RBAC claims, we fetch the user's
-     * organization membership to determine their role, then map it to permissions.
+     * This fetches the user's organization membership to get their role,
+     * then fetches the organization's roles to get the actual permissions.
+     * This makes WorkOS the single source of truth for permissions.
      *
-     * Results are cached for 5 minutes to reduce API calls while still allowing
-     * role changes to propagate relatively quickly.
+     * Results are cached:
+     * - User membership: 5 minutes (allows role changes to propagate)
+     * - Organization roles: 1 hour (permissions change less frequently)
      *
      * @return array{0: string|null, 1: array<string>}
      */
-    protected function fetchRoleFromWorkOs(string $workosUserId, string $orgId): array
+    protected function fetchRoleAndPermissions(string $workosUserId, string $orgId): array
     {
-        $cacheKey = "workos_role:{$workosUserId}:{$orgId}";
+        $cacheKey = "workos_user_role:{$workosUserId}:{$orgId}";
 
         return Cache::remember($cacheKey, 300, function () use ($workosUserId, $orgId): array {
             try {
-                Log::debug('Fetching organization membership from WorkOS API', [
-                    'workos_user_id' => $workosUserId,
-                    'org_id' => $orgId,
-                ]);
-
-                // Use WorkOS SDK to list organization memberships
                 WorkOS::configure();
-                $userManagement = new UserManagement;
 
-                [$before, $after, $memberships] = $userManagement->listOrganizationMemberships(
-                    userId: $workosUserId,
-                    organizationId: $orgId,
-                    limit: 1
-                );
+                // Get user's role from their organization membership
+                $roleSlug = $this->fetchUserRoleSlug($workosUserId, $orgId);
 
-                if (empty($memberships)) {
-                    Log::warning('No organization membership found', [
-                        'workos_user_id' => $workosUserId,
-                        'org_id' => $orgId,
-                    ]);
-
+                if (! $roleSlug) {
                     return [null, []];
                 }
 
-                $membership = $memberships[0];
-                $role = $membership->role['slug'] ?? null;
+                // Get permissions for that role from the organization
+                $permissions = $this->fetchRolePermissions($orgId, $roleSlug);
 
-                Log::info('Found WorkOS organization membership', [
-                    'membership_id' => $membership->id ?? null,
-                    'role_slug' => $role,
-                    'role_name' => $membership->role['name'] ?? null,
-                ]);
-
-                $permissions = $this->getPermissionsForRole($role);
-
-                return [$role, $permissions];
+                return [$roleSlug, $permissions];
             } catch (\Exception $e) {
-                Log::error('Exception fetching WorkOS membership', [
+                Log::error('Exception fetching WorkOS role/permissions', [
                     'error' => $e->getMessage(),
                     'workos_user_id' => $workosUserId,
                     'org_id' => $orgId,
@@ -185,33 +168,85 @@ class VerifyWorkOsJwt
     }
 
     /**
-     * Map a role slug to its permissions.
+     * Fetch the user's role slug from their organization membership.
+     */
+    protected function fetchUserRoleSlug(string $workosUserId, string $orgId): ?string
+    {
+        Log::debug('Fetching organization membership from WorkOS API', [
+            'workos_user_id' => $workosUserId,
+            'org_id' => $orgId,
+        ]);
+
+        $userManagement = new UserManagement;
+
+        [$before, $after, $memberships] = $userManagement->listOrganizationMemberships(
+            userId: $workosUserId,
+            organizationId: $orgId,
+            limit: 1
+        );
+
+        if (empty($memberships)) {
+            Log::warning('No organization membership found', [
+                'workos_user_id' => $workosUserId,
+                'org_id' => $orgId,
+            ]);
+
+            return null;
+        }
+
+        $membership = $memberships[0];
+        $roleSlug = $membership->role['slug'] ?? null;
+
+        Log::info('Found WorkOS organization membership', [
+            'membership_id' => $membership->id ?? null,
+            'role_slug' => $roleSlug,
+        ]);
+
+        return $roleSlug;
+    }
+
+    /**
+     * Fetch permissions for a role from the organization's role definitions.
      *
-     * These mappings should match the permissions configured in WorkOS Dashboard.
-     * When you add or modify permissions in WorkOS, update this mapping accordingly.
+     * Organization roles are cached for 1 hour since permissions change less
+     * frequently than user role assignments.
      *
      * @return array<string>
      */
-    protected function getPermissionsForRole(?string $role): array
+    protected function fetchRolePermissions(string $orgId, string $roleSlug): array
     {
-        return match ($role) {
-            'free-tier' => [
-                'bookmarks:read',
-                'lists:read',
-                'tags:read',
-            ],
-            'subscriber' => [
-                'bookmarks:read',
-                'bookmarks:write',
-                'bookmarks:delete',
-                'lists:read',
-                'lists:write',
-                'lists:delete',
-                'tags:read',
-                'tags:write',
-            ],
-            default => [],
-        };
+        // Cache organization roles for longer since they change less frequently
+        $rolesCacheKey = "workos_org_roles:{$orgId}";
+
+        /** @var array<string, array<string>> $rolesMap */
+        $rolesMap = Cache::remember($rolesCacheKey, 3600, function () use ($orgId): array {
+            Log::debug('Fetching organization roles from WorkOS API', ['org_id' => $orgId]);
+
+            $organizations = new Organizations;
+            [$roles] = $organizations->listOrganizationRoles($orgId);
+
+            // Build a map of role slug -> permissions
+            $map = [];
+            foreach ($roles as $role) {
+                $map[$role->slug] = $role->permissions ?? [];
+
+                Log::debug('Loaded role from WorkOS', [
+                    'role_slug' => $role->slug,
+                    'permissions' => $role->permissions ?? [],
+                ]);
+            }
+
+            return $map;
+        });
+
+        $permissions = $rolesMap[$roleSlug] ?? [];
+
+        Log::debug('Resolved permissions for role', [
+            'role_slug' => $roleSlug,
+            'permissions' => $permissions,
+        ]);
+
+        return $permissions;
     }
 
     /**
