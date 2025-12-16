@@ -9,6 +9,7 @@ use Firebase\JWT\JWT;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class VerifyWorkOsJwt
@@ -43,8 +44,26 @@ class VerifyWorkOsJwt
 
             // Extract role and permissions from JWT claims (set by WorkOS AuthKit RBAC)
             // These are only present when user has an organization membership
-            $user->setMcpRole($decoded->role ?? null);
-            $user->setMcpPermissions($decoded->permissions ?? []);
+            $role = $decoded->role ?? null;
+            $permissions = $decoded->permissions ?? [];
+
+            Log::debug('MCP JWT claims', [
+                'user_id' => $user->id,
+                'workos_id' => $decoded->sub,
+                'role' => $role,
+                'permissions' => $permissions,
+                'org_id' => $decoded->org_id ?? null,
+            ]);
+
+            if (empty($permissions)) {
+                Log::warning('MCP JWT has no permissions - tools will be hidden', [
+                    'user_id' => $user->id,
+                    'hint' => 'Create permissions and roles in WorkOS Dashboard, then re-authenticate',
+                ]);
+            }
+
+            $user->setMcpRole($role);
+            $user->setMcpPermissions($permissions);
 
             // Set the user on Laravel's auth system so MCP Request->user() works
             Auth::setUser($user);

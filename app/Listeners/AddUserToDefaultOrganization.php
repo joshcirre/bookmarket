@@ -4,7 +4,6 @@ namespace App\Listeners;
 
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -13,8 +12,11 @@ use Illuminate\Support\Facades\Log;
  *
  * This is required for WorkOS AuthKit RBAC - users must belong to an
  * organization to have roles and permissions included in their JWT.
+ *
+ * Note: This runs synchronously during registration to ensure the user
+ * is added to the org before their first authenticated request.
  */
-class AddUserToDefaultOrganization implements ShouldQueue
+class AddUserToDefaultOrganization
 {
     /**
      * Handle the event.
@@ -48,7 +50,7 @@ class AddUserToDefaultOrganization implements ShouldQueue
                 ->post('https://api.workos.com/user_management/organization_memberships', [
                     'organization_id' => $organizationId,
                     'user_id' => $user->workos_id,
-                    // No role_slug specified = uses the organization's default role
+                    'role_slug' => 'free-tier',
                 ]);
 
             if ($response->successful()) {
