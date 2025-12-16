@@ -4,14 +4,13 @@ namespace App\Http\Middleware;
 
 use App\Models\User;
 use Closure;
-use Firebase\JWT\JWK;
-use Firebase\JWT\JWT;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Laravel\WorkOS\WorkOS;
 use Symfony\Component\HttpFoundation\Response;
+use WorkOS\UserManagement;
 
 /**
  * Verify WorkOS AuthKit JWT tokens for MCP authentication.
@@ -49,25 +48,38 @@ class VerifyWorkOsJwt
         }
 
         try {
-            $keys = $this->getJwks();
-            $decoded = JWT::decode($token, $keys);
+            // Use Laravel WorkOS SDK to decode the JWT
+            $decoded = WorkOS::decodeAccessToken($token);
+
+            if ($decoded === false) {
+                Log::warning('MCP JWT decode failed');
+
+                return $this->unauthorizedResponse('Invalid token');
+            }
+
+            $workosId = $decoded['sub'] ?? null;
+            $orgId = $decoded['org_id'] ?? null;
+
+            if (! $workosId) {
+                Log::warning('MCP JWT missing sub claim');
+
+                return $this->unauthorizedResponse('Invalid token');
+            }
 
             // Find user by WorkOS ID (sub claim)
-            $user = User::query()->where('workos_id', $decoded->sub)->first();
+            $user = User::query()->where('workos_id', $workosId)->first();
 
             if (! $user) {
-                Log::warning('MCP user not found', ['workos_id' => $decoded->sub]);
+                Log::warning('MCP user not found', ['workos_id' => $workosId]);
 
                 return $this->unauthorizedResponse('User not found');
             }
 
-            $orgId = $decoded->org_id ?? null;
-
             Log::debug('MCP JWT decoded', [
                 'user_id' => $user->id,
-                'workos_id' => $decoded->sub,
+                'workos_id' => $workosId,
                 'org_id' => $orgId,
-                'claims' => array_keys((array) $decoded),
+                'claims' => array_keys($decoded),
             ]);
 
             // Fetch role and permissions from WorkOS API
@@ -76,7 +88,7 @@ class VerifyWorkOsJwt
             $permissions = [];
 
             if ($orgId) {
-                [$role, $permissions] = $this->fetchRoleFromWorkOs($decoded->sub, $orgId);
+                [$role, $permissions] = $this->fetchRoleFromWorkOs($workosId, $orgId);
             } else {
                 Log::warning('MCP token missing org_id - user has no organization context', [
                     'user_id' => $user->id,
@@ -108,33 +120,7 @@ class VerifyWorkOsJwt
     }
 
     /**
-     * Get the JWKS keys from WorkOS, with caching.
-     *
-     * @return array<string, \Firebase\JWT\Key>
-     */
-    protected function getJwks(): array
-    {
-        /** @var array{keys: array<int, array<string, mixed>>} $jwks */
-        $jwks = Cache::remember('workos_jwks', 3600, function (): array {
-            /** @var string $authkitDomain */
-            $authkitDomain = config('services.workos.authkit_domain');
-            $jwksUri = $authkitDomain.'/oauth2/jwks';
-
-            Log::debug('Fetching JWKS from WorkOS', ['uri' => $jwksUri]);
-
-            $response = file_get_contents($jwksUri);
-
-            throw_if($response === false, \RuntimeException::class, 'Failed to fetch JWKS from WorkOS');
-
-            /** @var array{keys: array<int, array<string, mixed>>} */
-            return json_decode($response, true);
-        });
-
-        return JWK::parseKeySet($jwks);
-    }
-
-    /**
-     * Fetch user's role and permissions from WorkOS API.
+     * Fetch user's role and permissions from WorkOS API using the SDK.
      *
      * Since MCP OAuth tokens don't include RBAC claims, we fetch the user's
      * organization membership to determine their role, then map it to permissions.
@@ -155,22 +141,15 @@ class VerifyWorkOsJwt
                     'org_id' => $orgId,
                 ]);
 
-                $response = Http::withToken(config('services.workos.secret'))
-                    ->get('https://api.workos.com/user_management/organization_memberships', [
-                        'user_id' => $workosUserId,
-                        'organization_id' => $orgId,
-                    ]);
+                // Use WorkOS SDK to list organization memberships
+                WorkOS::configure();
+                $userManagement = new UserManagement;
 
-                if (! $response->successful()) {
-                    Log::error('WorkOS API request failed', [
-                        'status' => $response->status(),
-                        'body' => $response->body(),
-                    ]);
-
-                    return [null, []];
-                }
-
-                $memberships = $response->json('data', []);
+                [$before, $after, $memberships] = $userManagement->listOrganizationMemberships(
+                    userId: $workosUserId,
+                    organizationId: $orgId,
+                    limit: 1
+                );
 
                 if (empty($memberships)) {
                     Log::warning('No organization membership found', [
@@ -182,12 +161,12 @@ class VerifyWorkOsJwt
                 }
 
                 $membership = $memberships[0];
-                $role = $membership['role']['slug'] ?? null;
+                $role = $membership->role['slug'] ?? null;
 
                 Log::info('Found WorkOS organization membership', [
-                    'membership_id' => $membership['id'] ?? null,
+                    'membership_id' => $membership->id ?? null,
                     'role_slug' => $role,
-                    'role_name' => $membership['role']['name'] ?? null,
+                    'role_name' => $membership->role['name'] ?? null,
                 ]);
 
                 $permissions = $this->getPermissionsForRole($role);
