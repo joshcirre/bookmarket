@@ -9,6 +9,7 @@ use Firebase\JWT\JWT;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -43,23 +44,33 @@ class VerifyWorkOsJwt
             }
 
             // Extract role and permissions from JWT claims (set by WorkOS AuthKit RBAC)
-            // These are only present when user has an organization membership
+            // WorkOS includes these claims when user authenticates with organization context
             $role = $decoded->role ?? null;
             $permissions = $decoded->permissions ?? [];
+            $orgId = $decoded->org_id ?? null;
+
+            // OAuth Connect may use 'scope' claim instead of 'permissions'
+            // Scopes are space-separated string, permissions are an array
+            $scope = $decoded->scope ?? null;
+            if (empty($permissions) && $scope) {
+                $permissions = is_string($scope) ? explode(' ', $scope) : (array) $scope;
+            }
 
             Log::debug('MCP JWT claims', [
                 'user_id' => $user->id,
                 'workos_id' => $decoded->sub,
                 'role' => $role,
                 'permissions' => $permissions,
-                'org_id' => $decoded->org_id ?? null,
+                'org_id' => $orgId,
+                'scope' => $scope,
+                'all_claims' => array_keys((array) $decoded),
             ]);
 
-            if (empty($permissions)) {
-                Log::warning('MCP JWT has no permissions - tools will be hidden', [
-                    'user_id' => $user->id,
-                    'hint' => 'Create permissions and roles in WorkOS Dashboard, then re-authenticate',
-                ]);
+            // OAuth Connect tokens may not include role/permissions even with org_id
+            // Fetch from WorkOS API if missing
+            if ($orgId && empty($permissions)) {
+                Log::info('Fetching role/permissions from WorkOS API (not in JWT)');
+                [$role, $permissions] = $this->fetchRoleFromWorkOs($decoded->sub, $orgId);
             }
 
             $user->setMcpRole($role);
@@ -95,6 +106,84 @@ class VerifyWorkOsJwt
         });
 
         return JWK::parseKeySet($jwks);
+    }
+
+    /**
+     * Fetch user's role and permissions from WorkOS API.
+     *
+     * OAuth Connect tokens may not include role/permissions claims,
+     * so we fall back to fetching from the API.
+     *
+     * @return array{0: string|null, 1: array<string>}
+     */
+    protected function fetchRoleFromWorkOs(string $workosUserId, string $orgId): array
+    {
+        $cacheKey = "workos_role:{$workosUserId}:{$orgId}";
+
+        return Cache::remember($cacheKey, 300, function () use ($workosUserId, $orgId): array {
+            try {
+                $response = Http::withToken(config('services.workos.secret'))
+                    ->get('https://api.workos.com/user_management/organization_memberships', [
+                        'user_id' => $workosUserId,
+                        'organization_id' => $orgId,
+                    ]);
+
+                if (! $response->successful()) {
+                    Log::warning('Failed to fetch WorkOS membership', [
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                    ]);
+
+                    return [null, []];
+                }
+
+                $memberships = $response->json('data', []);
+                if (empty($memberships)) {
+                    return [null, []];
+                }
+
+                $role = $memberships[0]['role']['slug'] ?? null;
+                Log::info('Fetched role from WorkOS API', ['role' => $role]);
+
+                // Map role to permissions (defined in WorkOS Dashboard)
+                $permissions = $this->getPermissionsForRole($role);
+
+                return [$role, $permissions];
+            } catch (\Exception $e) {
+                Log::error('Exception fetching WorkOS membership', ['error' => $e->getMessage()]);
+
+                return [null, []];
+            }
+        });
+    }
+
+    /**
+     * Get permissions for a role.
+     *
+     * These mappings should match what's configured in WorkOS Dashboard.
+     *
+     * @return array<string>
+     */
+    protected function getPermissionsForRole(?string $role): array
+    {
+        return match ($role) {
+            'free-tier' => [
+                'bookmarks:read',
+                'lists:read',
+                'tags:read',
+            ],
+            'subscriber' => [
+                'bookmarks:read',
+                'bookmarks:write',
+                'bookmarks:delete',
+                'lists:read',
+                'lists:write',
+                'lists:delete',
+                'tags:read',
+                'tags:write',
+            ],
+            default => [],
+        };
     }
 
     /**
