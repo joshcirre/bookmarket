@@ -18,10 +18,17 @@ Route::get('/.well-known/oauth-protected-resource/{path?}', fn () => response()-
 // Named 'mcp.oauth.authorization-server' for consistency with MCP conventions
 Route::get('/.well-known/oauth-authorization-server/{path?}', function () {
     $authkitDomain = config('services.workos.authkit_domain');
+    $organizationId = config('services.workos.default_organization_id');
+
+    // Include organization_id in authorize URL so WorkOS includes role/permissions in JWT
+    $authorizeUrl = $authkitDomain.'/oauth2/authorize';
+    if ($organizationId) {
+        $authorizeUrl .= '?organization_id='.$organizationId;
+    }
 
     return response()->json([
         'issuer' => $authkitDomain,
-        'authorization_endpoint' => $authkitDomain.'/oauth2/authorize',
+        'authorization_endpoint' => $authorizeUrl,
         'token_endpoint' => $authkitDomain.'/oauth2/token',
         'registration_endpoint' => $authkitDomain.'/oauth2/register',
         'userinfo_endpoint' => $authkitDomain.'/oauth2/userinfo',
