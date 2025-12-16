@@ -13,14 +13,25 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Verify WorkOS AuthKit JWT tokens for MCP authentication.
+ *
+ * WorkOS MCP OAuth tokens include standard claims (sub, org_id, etc.) but do NOT
+ * include RBAC claims (role, permissions) directly in the JWT. This is by design
+ * per WorkOS MCP documentation - the supported scopes are standard OIDC scopes
+ * (email, offline_access, openid, profile), not permission scopes.
+ *
+ * To implement RBAC for MCP tools, we:
+ * 1. Extract the user (sub) and organization (org_id) from the JWT
+ * 2. Fetch the user's role from WorkOS API using their organization membership
+ * 3. Map the role to permissions locally
+ *
+ * @see https://workos.com/docs/authkit/mcp
+ */
 class VerifyWorkOsJwt
 {
     /**
      * Handle an incoming request.
-     *
-     * Validates JWT tokens issued by WorkOS AuthKit and attaches
-     * the authenticated user to the request. Also extracts role and
-     * permissions claims from the token for RBAC.
      *
      * @param  Closure(Request): Response  $next
      */
@@ -29,6 +40,11 @@ class VerifyWorkOsJwt
         $token = $request->bearerToken();
 
         if (! $token) {
+            Log::warning('MCP request without bearer token', [
+                'path' => $request->path(),
+                'method' => $request->method(),
+            ]);
+
             return $this->unauthorizedResponse('No token provided');
         }
 
@@ -36,51 +52,57 @@ class VerifyWorkOsJwt
             $keys = $this->getJwks();
             $decoded = JWT::decode($token, $keys);
 
-            // Attach user to request based on WorkOS user ID (sub claim)
+            // Find user by WorkOS ID (sub claim)
             $user = User::query()->where('workos_id', $decoded->sub)->first();
 
             if (! $user) {
-                return $this->unauthorizedResponse('User not found for sub: '.$decoded->sub);
+                Log::warning('MCP user not found', ['workos_id' => $decoded->sub]);
+
+                return $this->unauthorizedResponse('User not found');
             }
 
-            // Extract role and permissions from JWT claims (set by WorkOS AuthKit RBAC)
-            // WorkOS includes these claims when user authenticates with organization context
-            $role = $decoded->role ?? null;
-            $permissions = $decoded->permissions ?? [];
             $orgId = $decoded->org_id ?? null;
 
-            // OAuth Connect may use 'scope' claim instead of 'permissions'
-            // Scopes are space-separated string, permissions are an array
-            $scope = $decoded->scope ?? null;
-            if (empty($permissions) && $scope) {
-                $permissions = is_string($scope) ? explode(' ', $scope) : (array) $scope;
-            }
-
-            Log::debug('MCP JWT claims', [
+            Log::debug('MCP JWT decoded', [
                 'user_id' => $user->id,
                 'workos_id' => $decoded->sub,
-                'role' => $role,
-                'permissions' => $permissions,
                 'org_id' => $orgId,
-                'scope' => $scope,
-                'all_claims' => array_keys((array) $decoded),
+                'claims' => array_keys((array) $decoded),
             ]);
 
-            // OAuth Connect tokens may not include role/permissions even with org_id
-            // Fetch from WorkOS API if missing
-            if ($orgId && empty($permissions)) {
-                Log::info('Fetching role/permissions from WorkOS API (not in JWT)');
+            // Fetch role and permissions from WorkOS API
+            // MCP OAuth tokens don't include RBAC claims, so we always fetch from API
+            $role = null;
+            $permissions = [];
+
+            if ($orgId) {
                 [$role, $permissions] = $this->fetchRoleFromWorkOs($decoded->sub, $orgId);
+            } else {
+                Log::warning('MCP token missing org_id - user has no organization context', [
+                    'user_id' => $user->id,
+                ]);
             }
 
             $user->setMcpRole($role);
             $user->setMcpPermissions($permissions);
 
+            Log::info('MCP authentication successful', [
+                'user_id' => $user->id,
+                'role' => $role,
+                'permissions' => $permissions,
+                'permission_count' => count($permissions),
+            ]);
+
             // Set the user on Laravel's auth system so MCP Request->user() works
             Auth::setUser($user);
 
             return $next($request);
-        } catch (\Exception) {
+        } catch (\Exception $e) {
+            Log::error('MCP JWT verification failed', [
+                'error' => $e->getMessage(),
+                'token_preview' => substr($token, 0, 20).'...',
+            ]);
+
             return $this->unauthorizedResponse('Invalid token');
         }
     }
@@ -97,6 +119,9 @@ class VerifyWorkOsJwt
             /** @var string $authkitDomain */
             $authkitDomain = config('services.workos.authkit_domain');
             $jwksUri = $authkitDomain.'/oauth2/jwks';
+
+            Log::debug('Fetching JWKS from WorkOS', ['uri' => $jwksUri]);
+
             $response = file_get_contents($jwksUri);
 
             throw_if($response === false, \RuntimeException::class, 'Failed to fetch JWKS from WorkOS');
@@ -111,8 +136,11 @@ class VerifyWorkOsJwt
     /**
      * Fetch user's role and permissions from WorkOS API.
      *
-     * OAuth Connect tokens may not include role/permissions claims,
-     * so we fall back to fetching from the API.
+     * Since MCP OAuth tokens don't include RBAC claims, we fetch the user's
+     * organization membership to determine their role, then map it to permissions.
+     *
+     * Results are cached for 5 minutes to reduce API calls while still allowing
+     * role changes to propagate relatively quickly.
      *
      * @return array{0: string|null, 1: array<string>}
      */
@@ -122,6 +150,11 @@ class VerifyWorkOsJwt
 
         return Cache::remember($cacheKey, 300, function () use ($workosUserId, $orgId): array {
             try {
+                Log::debug('Fetching organization membership from WorkOS API', [
+                    'workos_user_id' => $workosUserId,
+                    'org_id' => $orgId,
+                ]);
+
                 $response = Http::withToken(config('services.workos.secret'))
                     ->get('https://api.workos.com/user_management/organization_memberships', [
                         'user_id' => $workosUserId,
@@ -129,7 +162,7 @@ class VerifyWorkOsJwt
                     ]);
 
                 if (! $response->successful()) {
-                    Log::warning('Failed to fetch WorkOS membership', [
+                    Log::error('WorkOS API request failed', [
                         'status' => $response->status(),
                         'body' => $response->body(),
                     ]);
@@ -138,19 +171,34 @@ class VerifyWorkOsJwt
                 }
 
                 $memberships = $response->json('data', []);
+
                 if (empty($memberships)) {
+                    Log::warning('No organization membership found', [
+                        'workos_user_id' => $workosUserId,
+                        'org_id' => $orgId,
+                    ]);
+
                     return [null, []];
                 }
 
-                $role = $memberships[0]['role']['slug'] ?? null;
-                Log::info('Fetched role from WorkOS API', ['role' => $role]);
+                $membership = $memberships[0];
+                $role = $membership['role']['slug'] ?? null;
 
-                // Map role to permissions (defined in WorkOS Dashboard)
+                Log::info('Found WorkOS organization membership', [
+                    'membership_id' => $membership['id'] ?? null,
+                    'role_slug' => $role,
+                    'role_name' => $membership['role']['name'] ?? null,
+                ]);
+
                 $permissions = $this->getPermissionsForRole($role);
 
                 return [$role, $permissions];
             } catch (\Exception $e) {
-                Log::error('Exception fetching WorkOS membership', ['error' => $e->getMessage()]);
+                Log::error('Exception fetching WorkOS membership', [
+                    'error' => $e->getMessage(),
+                    'workos_user_id' => $workosUserId,
+                    'org_id' => $orgId,
+                ]);
 
                 return [null, []];
             }
@@ -158,9 +206,10 @@ class VerifyWorkOsJwt
     }
 
     /**
-     * Get permissions for a role.
+     * Map a role slug to its permissions.
      *
-     * These mappings should match what's configured in WorkOS Dashboard.
+     * These mappings should match the permissions configured in WorkOS Dashboard.
+     * When you add or modify permissions in WorkOS, update this mapping accordingly.
      *
      * @return array<string>
      */
@@ -188,6 +237,9 @@ class VerifyWorkOsJwt
 
     /**
      * Return an unauthorized response with OAuth metadata header.
+     *
+     * The WWW-Authenticate header includes the resource_metadata URL so MCP clients
+     * can discover the authorization server and initiate the OAuth flow.
      */
     protected function unauthorizedResponse(string $error): Response
     {
