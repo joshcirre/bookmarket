@@ -14,6 +14,20 @@ class User extends Authenticatable
     use HasFactory;
     use Notifiable;
 
+    /**
+     * The user's role from the MCP JWT token (e.g., 'member', 'subscriber').
+     * Only set during MCP requests, not persisted to database.
+     */
+    protected ?string $mcpRole = null;
+
+    /**
+     * The user's permissions from the MCP JWT token (e.g., ['bookmarks:read', 'lists:write']).
+     * Only set during MCP requests, not persisted to database.
+     *
+     * @var array<string>
+     */
+    protected array $mcpPermissions = [];
+
     protected static function boot(): void
     {
         parent::boot();
@@ -121,5 +135,66 @@ class User extends Authenticatable
     protected function getProfileUrlAttribute(): string
     {
         return route('profile.show', $this->username);
+    }
+
+    /**
+     * Set the user's MCP role from the JWT token.
+     */
+    public function setMcpRole(?string $role): void
+    {
+        $this->mcpRole = $role;
+    }
+
+    /**
+     * Get the user's MCP role.
+     */
+    public function getMcpRole(): ?string
+    {
+        return $this->mcpRole;
+    }
+
+    /**
+     * Set the user's MCP permissions from the JWT token.
+     *
+     * @param  array<string>|object  $permissions
+     */
+    public function setMcpPermissions(array|object $permissions): void
+    {
+        // Handle both array and stdClass from JWT decode
+        $this->mcpPermissions = is_array($permissions) ? $permissions : (array) $permissions;
+    }
+
+    /**
+     * Get the user's MCP permissions.
+     *
+     * @return array<string>
+     */
+    public function getMcpPermissions(): array
+    {
+        return $this->mcpPermissions;
+    }
+
+    /**
+     * Check if the user has a specific MCP permission.
+     */
+    public function hasMcpPermission(string $permission): bool
+    {
+        return in_array($permission, $this->mcpPermissions, true);
+    }
+
+    /**
+     * Check if the user has any of the given MCP permissions.
+     *
+     * @param  array<string>  $permissions
+     */
+    public function hasAnyMcpPermission(array $permissions): bool
+    {
+        foreach ($permissions as $permission) {
+            if ($this->hasMcpPermission($permission)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

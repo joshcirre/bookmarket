@@ -2,12 +2,12 @@
 
 namespace App\Mcp\Tools\Lists;
 
+use App\Mcp\Tools\RbacTool;
 use App\Models\BookmarkList;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
-use App\Mcp\Tools\RbacTool;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 /**
@@ -16,6 +16,8 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[IsReadOnly]
 class GetListTool extends RbacTool
 {
+    protected ?string $requiredPermission = 'lists:read';
+
     /**
      * The tool's description.
      */

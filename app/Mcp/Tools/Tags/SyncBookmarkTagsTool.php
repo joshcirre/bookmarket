@@ -2,18 +2,20 @@
 
 namespace App\Mcp\Tools\Tags;
 
+use App\Mcp\Tools\RbacTool;
 use App\Models\Bookmark;
 use App\Models\Tag;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
-use App\Mcp\Tools\RbacTool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[IsIdempotent]
 class SyncBookmarkTagsTool extends RbacTool
 {
+    protected ?string $requiredPermission = 'tags:write';
+
     /**
      * The tool's description.
      */

@@ -2,12 +2,12 @@
 
 namespace App\Mcp\Tools\Search;
 
+use App\Mcp\Tools\RbacTool;
 use App\Models\Bookmark;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
-use App\Mcp\Tools\RbacTool;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 /**
@@ -16,6 +16,8 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[IsReadOnly]
 class SearchBookmarksTool extends RbacTool
 {
+    protected ?string $requiredPermission = 'bookmarks:read';
+
     /**
      * The tool's description.
      */

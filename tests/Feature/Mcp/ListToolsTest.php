@@ -13,8 +13,23 @@ use App\Models\Bookmark;
 use App\Models\BookmarkList;
 use App\Models\User;
 
-test('list_all_lists returns user lists', function (): void {
+/**
+ * Helper to create a user with all MCP permissions for testing.
+ */
+function createListTestUser(): User
+{
     $user = User::factory()->create();
+    $user->setMcpPermissions([
+        'bookmarks:read', 'bookmarks:write', 'bookmarks:delete',
+        'lists:read', 'lists:write', 'lists:delete',
+        'tags:read', 'tags:write',
+    ]);
+
+    return $user;
+}
+
+test('list_all_lists returns user lists', function (): void {
+    $user = createListTestUser();
     BookmarkList::factory()->count(3)->for($user)->create();
 
     // Create lists for another user to ensure isolation
@@ -29,7 +44,7 @@ test('list_all_lists returns user lists', function (): void {
 });
 
 test('list_all_lists can include bookmarks', function (): void {
-    $user = User::factory()->create();
+    $user = createListTestUser();
     $list = BookmarkList::factory()->for($user)->create();
     Bookmark::factory()->count(2)->for($list)->for($user)->create();
 
@@ -41,7 +56,7 @@ test('list_all_lists can include bookmarks', function (): void {
 });
 
 test('get_list returns list with bookmarks', function (): void {
-    $user = User::factory()->create();
+    $user = createListTestUser();
     $list = BookmarkList::factory()->for($user)->create(['title' => 'Test List']);
     Bookmark::factory()->count(3)->for($list)->for($user)->create();
 
@@ -54,7 +69,7 @@ test('get_list returns list with bookmarks', function (): void {
 });
 
 test('get_list returns error for non-existent list', function (): void {
-    $user = User::factory()->create();
+    $user = createListTestUser();
 
     $response = BookmarketServer::actingAs($user)
         ->tool(GetListTool::class, ['list_id' => 999]);
@@ -63,7 +78,7 @@ test('get_list returns error for non-existent list', function (): void {
 });
 
 test('get_list returns error for other users list', function (): void {
-    $user = User::factory()->create();
+    $user = createListTestUser();
     $otherUser = User::factory()->create();
     $list = BookmarkList::factory()->for($otherUser)->create();
 
@@ -74,7 +89,7 @@ test('get_list returns error for other users list', function (): void {
 });
 
 test('create_list creates a new list', function (): void {
-    $user = User::factory()->create();
+    $user = createListTestUser();
 
     $response = BookmarketServer::actingAs($user)
         ->tool(CreateListTool::class, [
@@ -94,7 +109,7 @@ test('create_list creates a new list', function (): void {
 });
 
 test('create_list defaults to private visibility', function (): void {
-    $user = User::factory()->create();
+    $user = createListTestUser();
 
     $response = BookmarketServer::actingAs($user)
         ->tool(CreateListTool::class, ['title' => 'Private List']);
@@ -109,7 +124,7 @@ test('create_list defaults to private visibility', function (): void {
 });
 
 test('create_list requires title', function (): void {
-    $user = User::factory()->create();
+    $user = createListTestUser();
 
     $response = BookmarketServer::actingAs($user)
         ->tool(CreateListTool::class, ['description' => 'No title']);
@@ -118,7 +133,7 @@ test('create_list requires title', function (): void {
 });
 
 test('update_list updates list properties', function (): void {
-    $user = User::factory()->create();
+    $user = createListTestUser();
     $list = BookmarkList::factory()->for($user)->create([
         'title' => 'Original Title',
         'visibility' => ListVisibility::Private,
@@ -139,7 +154,7 @@ test('update_list updates list properties', function (): void {
 });
 
 test('update_list returns error without updates', function (): void {
-    $user = User::factory()->create();
+    $user = createListTestUser();
     $list = BookmarkList::factory()->for($user)->create();
 
     $response = BookmarketServer::actingAs($user)
@@ -149,7 +164,7 @@ test('update_list returns error without updates', function (): void {
 });
 
 test('delete_list requires confirmation', function (): void {
-    $user = User::factory()->create();
+    $user = createListTestUser();
     $list = BookmarkList::factory()->for($user)->create();
 
     $response = BookmarketServer::actingAs($user)
@@ -164,7 +179,7 @@ test('delete_list requires confirmation', function (): void {
 });
 
 test('delete_list deletes list and bookmarks', function (): void {
-    $user = User::factory()->create();
+    $user = createListTestUser();
     $list = BookmarkList::factory()->for($user)->create();
     $bookmark = Bookmark::factory()->for($list)->for($user)->create();
 

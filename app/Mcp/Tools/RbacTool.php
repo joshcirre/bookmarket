@@ -4,28 +4,27 @@ declare(strict_types=1);
 
 namespace App\Mcp\Tools;
 
-use App\Services\WorkOsFga;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Mcp\Server\Tool;
 
 /**
  * Base class for MCP tools that require RBAC permission checks.
  *
- * Tools extending this class will automatically check WorkOS FGA
- * to determine if the authenticated user can execute the tool.
+ * Tools extending this class use WorkOS AuthKit's built-in Roles and Permissions.
+ * Permissions are extracted from the JWT token at authentication time (no API calls).
  *
- * To make a tool always available regardless of FGA, set:
- * protected bool $requiresFgaCheck = false;
+ * Each tool specifies required permission(s) via the $requiredPermission property.
+ * If no permission is specified, the tool is available to all authenticated users.
  */
 abstract class RbacTool extends Tool
 {
     /**
-     * Whether this tool requires FGA permission checks.
+     * The permission required to use this tool.
      *
-     * Set to false for tools that should always be available
-     * to authenticated users (e.g., read-only or basic tools).
+     * Uses colon-separated format: 'resource:action' (e.g., 'bookmarks:delete').
+     * Set to null for tools available to all authenticated users.
      */
-    protected bool $requiresFgaCheck = true;
+    protected ?string $requiredPermission = null;
 
     /**
      * Determine if this tool should be registered (visible) for the current user.
@@ -33,15 +32,10 @@ abstract class RbacTool extends Tool
      * This method is called by Laravel MCP when building the tool list.
      * If it returns false, the tool won't appear in tools/list responses.
      */
-    public function shouldRegister(WorkOsFga $fga): bool
+    public function shouldRegister(): bool
     {
-        // If FGA check is disabled for this tool, always register it
-        if (! $this->requiresFgaCheck) {
-            return true;
-        }
-
-        // If FGA is not configured, allow all tools
-        if (! $fga->isConfigured()) {
+        // If no permission required, always register for authenticated users
+        if ($this->requiredPermission === null) {
             return true;
         }
 
@@ -53,12 +47,7 @@ abstract class RbacTool extends Tool
             return false;
         }
 
-        // User doesn't have a WorkOS ID - can't check FGA
-        if (! $user->workos_id) {
-            return false;
-        }
-
-        // Check FGA for permission
-        return $fga->canExecuteTool($user->workos_id, $this->name());
+        // Check if user has the required permission from their JWT
+        return $user->hasMcpPermission($this->requiredPermission);
     }
 }

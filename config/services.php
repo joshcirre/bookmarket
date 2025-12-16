@@ -40,9 +40,9 @@ return [
         'secret' => env('WORKOS_API_KEY'),
         'redirect_url' => env('WORKOS_REDIRECT_URL'),
         'authkit_domain' => env('WORKOS_AUTHKIT_DOMAIN'),
-        // WorkOS Fine-Grained Authorization (FGA) API key for MCP tool RBAC
-        // Leave empty to disable FGA checks (all tools available to all users)
-        'fga_api_key' => env('WORKOS_FGA_API_KEY'),
+        // Default organization ID for new users (required for RBAC)
+        // All users are added to this org with the default 'member' role
+        'default_organization_id' => env('WORKOS_DEFAULT_ORGANIZATION_ID'),
     ],
 
 ];

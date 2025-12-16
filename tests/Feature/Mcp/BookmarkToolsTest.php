@@ -14,8 +14,23 @@ use App\Models\BookmarkList;
 use App\Models\Tag;
 use App\Models\User;
 
-test('create_bookmark adds bookmark to list', function (): void {
+/**
+ * Helper to create a user with all MCP permissions for testing.
+ */
+function createUserWithPermissions(): User
+{
     $user = User::factory()->create();
+    $user->setMcpPermissions([
+        'bookmarks:read', 'bookmarks:write', 'bookmarks:delete',
+        'lists:read', 'lists:write', 'lists:delete',
+        'tags:read', 'tags:write',
+    ]);
+
+    return $user;
+}
+
+test('create_bookmark adds bookmark to list', function (): void {
+    $user = createUserWithPermissions();
     $list = BookmarkList::factory()->for($user)->create();
 
     $response = BookmarketServer::actingAs($user)
@@ -41,7 +56,7 @@ test('create_bookmark adds bookmark to list', function (): void {
 });
 
 test('create_bookmark requires valid url', function (): void {
-    $user = User::factory()->create();
+    $user = createUserWithPermissions();
     $list = BookmarkList::factory()->for($user)->create();
 
     $response = BookmarketServer::actingAs($user)
@@ -55,7 +70,7 @@ test('create_bookmark requires valid url', function (): void {
 });
 
 test('create_bookmark fails for other users list', function (): void {
-    $user = User::factory()->create();
+    $user = createUserWithPermissions();
     $otherUser = User::factory()->create();
     $list = BookmarkList::factory()->for($otherUser)->create();
 
@@ -70,7 +85,7 @@ test('create_bookmark fails for other users list', function (): void {
 });
 
 test('get_bookmark returns bookmark details', function (): void {
-    $user = User::factory()->create();
+    $user = createUserWithPermissions();
     $list = BookmarkList::factory()->for($user)->create();
     $bookmark = Bookmark::factory()->for($list)->for($user)->create([
         'title' => 'Test Bookmark',
@@ -86,7 +101,7 @@ test('get_bookmark returns bookmark details', function (): void {
 });
 
 test('update_bookmark modifies bookmark', function (): void {
-    $user = User::factory()->create();
+    $user = createUserWithPermissions();
     $list = BookmarkList::factory()->for($user)->create();
     $bookmark = Bookmark::factory()->for($list)->for($user)->create([
         'title' => 'Original Title',
@@ -107,7 +122,7 @@ test('update_bookmark modifies bookmark', function (): void {
 });
 
 test('update_bookmark can change url and updates domain', function (): void {
-    $user = User::factory()->create();
+    $user = createUserWithPermissions();
     $list = BookmarkList::factory()->for($user)->create();
     $bookmark = Bookmark::factory()->for($list)->for($user)->create([
         'url' => 'https://old-site.com/page',
@@ -128,7 +143,7 @@ test('update_bookmark can change url and updates domain', function (): void {
 });
 
 test('delete_bookmark removes bookmark', function (): void {
-    $user = User::factory()->create();
+    $user = createUserWithPermissions();
     $list = BookmarkList::factory()->for($user)->create();
     $bookmark = Bookmark::factory()->for($list)->for($user)->create();
 
@@ -144,7 +159,7 @@ test('delete_bookmark removes bookmark', function (): void {
 });
 
 test('move_bookmark moves to different list', function (): void {
-    $user = User::factory()->create();
+    $user = createUserWithPermissions();
     $sourceList = BookmarkList::factory()->for($user)->create(['title' => 'Source']);
     $targetList = BookmarkList::factory()->for($user)->create(['title' => 'Target']);
     $bookmark = Bookmark::factory()->for($sourceList)->for($user)->create();
@@ -167,7 +182,7 @@ test('move_bookmark moves to different list', function (): void {
 });
 
 test('move_bookmark fails when already in target list', function (): void {
-    $user = User::factory()->create();
+    $user = createUserWithPermissions();
     $list = BookmarkList::factory()->for($user)->create();
     $bookmark = Bookmark::factory()->for($list)->for($user)->create();
 
@@ -181,7 +196,7 @@ test('move_bookmark fails when already in target list', function (): void {
 });
 
 test('reorder_bookmarks changes positions', function (): void {
-    $user = User::factory()->create();
+    $user = createUserWithPermissions();
     $list = BookmarkList::factory()->for($user)->create();
 
     $bookmark1 = Bookmark::factory()->for($list)->for($user)->create(['position' => 1]);
@@ -207,7 +222,7 @@ test('reorder_bookmarks changes positions', function (): void {
 });
 
 test('reorder_bookmarks fails with invalid bookmark ids', function (): void {
-    $user = User::factory()->create();
+    $user = createUserWithPermissions();
     $list = BookmarkList::factory()->for($user)->create();
     Bookmark::factory()->for($list)->for($user)->create();
 
@@ -221,7 +236,7 @@ test('reorder_bookmarks fails with invalid bookmark ids', function (): void {
 });
 
 test('create_bookmark with tags attaches tags', function (): void {
-    $user = User::factory()->create();
+    $user = createUserWithPermissions();
     $list = BookmarkList::factory()->for($user)->create();
 
     // Create an existing tag to verify reuse

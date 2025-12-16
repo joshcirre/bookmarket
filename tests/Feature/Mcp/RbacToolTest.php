@@ -2,225 +2,170 @@
 
 declare(strict_types=1);
 
-use App\Mcp\Servers\BookmarketServer;
 use App\Mcp\Tools\Bookmarks\CreateBookmarkTool;
+use App\Mcp\Tools\Bookmarks\DeleteBookmarkTool;
 use App\Mcp\Tools\Lists\ListAllListsTool;
 use App\Models\User;
-use App\Services\WorkOsFga;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Auth;
 
 beforeEach(function (): void {
-    // Clear any cached FGA responses
+    // Clear any cached data
     cache()->flush();
 });
 
-test('tools are available when FGA is not configured', function (): void {
-    // Ensure FGA is not configured
-    config(['services.workos.fga_api_key' => null]);
-
-    $fga = new WorkOsFga;
-    expect($fga->isConfigured())->toBeFalse();
-
+test('tools are available when user has required permission', function (): void {
     $user = User::factory()->create(['workos_id' => 'user_123']);
 
-    // Tools should be available when FGA is not configured
-    $response = BookmarketServer::actingAs($user)
-        ->tool(ListAllListsTool::class, []);
+    // Set permissions on the user (simulating JWT extraction)
+    $user->setMcpPermissions(['lists:read', 'bookmarks:read']);
 
-    $response->assertOk();
+    Auth::setUser($user);
+
+    $tool = new ListAllListsTool;
+
+    expect($tool->shouldRegister())->toBeTrue();
 });
 
-test('tools are available when user has FGA permission', function (): void {
-    config(['services.workos.fga_api_key' => 'sk_test_key']);
-
-    Http::fake([
-        'api.workos.com/fga/v1/check' => Http::response([
-            'result' => 'authorized',
-        ], 200),
-    ]);
-
-    $fga = new WorkOsFga;
-
-    expect($fga->canExecuteTool('user_123', 'create-bookmark-tool'))->toBeTrue();
-});
-
-test('tools are denied when user lacks FGA permission', function (): void {
-    config(['services.workos.fga_api_key' => 'sk_test_key']);
-
-    Http::fake([
-        'api.workos.com/fga/v1/check' => Http::response([
-            'result' => 'not_authorized',
-        ], 200),
-    ]);
-
-    $fga = new WorkOsFga;
-
-    expect($fga->canExecuteTool('user_123', 'delete-bookmark-tool'))->toBeFalse();
-});
-
-test('FGA permissions are cached', function (): void {
-    config(['services.workos.fga_api_key' => 'sk_test_key']);
-
-    Http::fake([
-        'api.workos.com/fga/v1/check' => Http::response([
-            'result' => 'authorized',
-        ], 200),
-    ]);
-
-    $fga = new WorkOsFga;
-
-    // First call - should hit the API
-    $fga->canExecuteTool('user_123', 'test-tool');
-    $fga->canExecuteTool('user_123', 'test-tool');
-    $fga->canExecuteTool('user_123', 'test-tool');
-
-    // Should only have made one HTTP request due to caching
-    Http::assertSentCount(1);
-});
-
-test('batch permission check works', function (): void {
-    config(['services.workos.fga_api_key' => 'sk_test_key']);
-
-    Http::fake([
-        'api.workos.com/fga/v1/check' => Http::response([
-            'results' => [
-                ['result' => 'authorized'],
-                ['result' => 'not_authorized'],
-                ['result' => 'authorized'],
-            ],
-        ], 200),
-    ]);
-
-    $fga = new WorkOsFga;
-    $results = $fga->canExecuteTools('user_123', [
-        'create-bookmark-tool',
-        'delete-bookmark-tool',
-        'list-all-lists-tool',
-    ]);
-
-    expect($results)->toBe([
-        'create-bookmark-tool' => true,
-        'delete-bookmark-tool' => false,
-        'list-all-lists-tool' => true,
-    ]);
-});
-
-test('grant tool access creates warrant', function (): void {
-    config(['services.workos.fga_api_key' => 'sk_test_key']);
-
-    Http::fake([
-        'api.workos.com/fga/v1/warrants' => Http::response([], 200),
-    ]);
-
-    $fga = new WorkOsFga;
-    $result = $fga->grantToolAccess('user_123', 'create-bookmark-tool');
-
-    expect($result)->toBeTrue();
-
-    Http::assertSent(function ($request) {
-        return $request->url() === 'https://api.workos.com/fga/v1/warrants'
-            && $request['0']['op'] === 'create'
-            && $request['0']['resource_type'] === 'mcp_tool'
-            && $request['0']['resource_id'] === 'create-bookmark-tool'
-            && $request['0']['relation'] === 'can_execute'
-            && $request['0']['subject']['resource_type'] === 'user'
-            && $request['0']['subject']['resource_id'] === 'user_123';
-    });
-});
-
-test('revoke tool access deletes warrant', function (): void {
-    config(['services.workos.fga_api_key' => 'sk_test_key']);
-
-    Http::fake([
-        'api.workos.com/fga/v1/warrants' => Http::response([], 200),
-    ]);
-
-    $fga = new WorkOsFga;
-    $result = $fga->revokeToolAccess('user_123', 'delete-bookmark-tool');
-
-    expect($result)->toBeTrue();
-
-    Http::assertSent(function ($request) {
-        return $request->url() === 'https://api.workos.com/fga/v1/warrants'
-            && $request['0']['op'] === 'delete'
-            && $request['0']['resource_type'] === 'mcp_tool'
-            && $request['0']['resource_id'] === 'delete-bookmark-tool';
-    });
-});
-
-test('FGA failure fails open by default', function (): void {
-    config(['services.workos.fga_api_key' => 'sk_test_key']);
-
-    Http::fake([
-        'api.workos.com/fga/v1/check' => Http::response([
-            'error' => 'Internal Server Error',
-        ], 500),
-    ]);
-
-    $fga = new WorkOsFga;
-
-    // Should fail open (return true) when FGA API is unavailable
-    expect($fga->canExecuteTool('user_123', 'test-tool'))->toBeTrue();
-});
-
-test('tools without FGA check are always available', function (): void {
-    config(['services.workos.fga_api_key' => 'sk_test_key']);
-
-    // Even with FGA configured, ListAllListsTool should check FGA
-    // because it extends RbacTool with requiresFgaCheck = true by default
-    Http::fake([
-        'api.workos.com/fga/v1/check' => Http::response([
-            'result' => 'authorized',
-        ], 200),
-    ]);
-
+test('tools are denied when user lacks required permission', function (): void {
     $user = User::factory()->create(['workos_id' => 'user_123']);
 
-    // This will trigger shouldRegister() which checks FGA
-    $response = BookmarketServer::actingAs($user)
-        ->tool(ListAllListsTool::class, []);
+    // Only give read permissions, not write
+    $user->setMcpPermissions(['lists:read', 'bookmarks:read']);
 
-    $response->assertOk();
-});
-
-test('shouldRegister returns false when user has no workos_id', function (): void {
-    config(['services.workos.fga_api_key' => 'sk_test_key']);
-
-    // Create user without workos_id
-    $user = User::factory()->create(['workos_id' => null]);
+    Auth::setUser($user);
 
     $tool = new CreateBookmarkTool;
-    $fga = new WorkOsFga;
 
-    // Use reflection to test shouldRegister behavior
-    \Illuminate\Support\Facades\Auth::setUser($user);
-
-    // The tool should not register because user has no workos_id
-    expect($tool->shouldRegister($fga))->toBeFalse();
+    expect($tool->shouldRegister())->toBeFalse();
 });
 
-test('grant multiple tools access works', function (): void {
-    config(['services.workos.fga_api_key' => 'sk_test_key']);
+test('delete tools require delete permission', function (): void {
+    $user = User::factory()->create(['workos_id' => 'user_123']);
 
-    Http::fake([
-        'api.workos.com/fga/v1/warrants' => Http::response([], 200),
+    // Give write but not delete permission
+    $user->setMcpPermissions(['bookmarks:read', 'bookmarks:write']);
+
+    Auth::setUser($user);
+
+    $tool = new DeleteBookmarkTool;
+
+    expect($tool->shouldRegister())->toBeFalse();
+
+    // Now add delete permission
+    $user->setMcpPermissions(['bookmarks:read', 'bookmarks:write', 'bookmarks:delete']);
+
+    expect($tool->shouldRegister())->toBeTrue();
+});
+
+test('tools are denied when user has no permissions', function (): void {
+    $user = User::factory()->create(['workos_id' => 'user_123']);
+
+    // No permissions set (empty array)
+    $user->setMcpPermissions([]);
+
+    Auth::setUser($user);
+
+    $tool = new ListAllListsTool;
+
+    expect($tool->shouldRegister())->toBeFalse();
+});
+
+test('tools are denied when no user is authenticated', function (): void {
+    // Don't set any user
+    Auth::logout();
+
+    $tool = new ListAllListsTool;
+
+    expect($tool->shouldRegister())->toBeFalse();
+});
+
+test('user hasMcpPermission method works correctly', function (): void {
+    $user = User::factory()->create();
+
+    $user->setMcpPermissions(['bookmarks:read', 'lists:write']);
+
+    expect($user->hasMcpPermission('bookmarks:read'))->toBeTrue();
+    expect($user->hasMcpPermission('lists:write'))->toBeTrue();
+    expect($user->hasMcpPermission('bookmarks:delete'))->toBeFalse();
+    expect($user->hasMcpPermission('nonexistent'))->toBeFalse();
+});
+
+test('user hasAnyMcpPermission method works correctly', function (): void {
+    $user = User::factory()->create();
+
+    $user->setMcpPermissions(['bookmarks:read']);
+
+    expect($user->hasAnyMcpPermission(['bookmarks:read', 'bookmarks:write']))->toBeTrue();
+    expect($user->hasAnyMcpPermission(['bookmarks:delete', 'lists:delete']))->toBeFalse();
+});
+
+test('user role is set and retrieved correctly', function (): void {
+    $user = User::factory()->create();
+
+    expect($user->getMcpRole())->toBeNull();
+
+    $user->setMcpRole('subscriber');
+
+    expect($user->getMcpRole())->toBe('subscriber');
+});
+
+test('permissions can be set from object (JWT decode format)', function (): void {
+    $user = User::factory()->create();
+
+    // JWT::decode returns stdClass, simulate that
+    $permissionsFromJwt = (object) ['0' => 'bookmarks:read', '1' => 'lists:write'];
+
+    $user->setMcpPermissions($permissionsFromJwt);
+
+    expect($user->getMcpPermissions())->toBe(['0' => 'bookmarks:read', '1' => 'lists:write']);
+    expect($user->hasMcpPermission('bookmarks:read'))->toBeTrue();
+});
+
+test('full subscriber role has access to all tools', function (): void {
+    $user = User::factory()->create(['workos_id' => 'user_123']);
+
+    // Subscriber gets all permissions
+    $user->setMcpRole('subscriber');
+    $user->setMcpPermissions([
+        'bookmarks:read',
+        'bookmarks:write',
+        'bookmarks:delete',
+        'lists:read',
+        'lists:write',
+        'lists:delete',
+        'tags:read',
+        'tags:write',
     ]);
 
-    $fga = new WorkOsFga;
-    $result = $fga->grantToolsAccess('user_123', [
-        'create-bookmark-tool',
-        'update-bookmark-tool',
-        'delete-bookmark-tool',
+    Auth::setUser($user);
+
+    $listTool = new ListAllListsTool;
+    $createTool = new CreateBookmarkTool;
+    $deleteTool = new DeleteBookmarkTool;
+
+    expect($listTool->shouldRegister())->toBeTrue();
+    expect($createTool->shouldRegister())->toBeTrue();
+    expect($deleteTool->shouldRegister())->toBeTrue();
+});
+
+test('free member role only has read access', function (): void {
+    $user = User::factory()->create(['workos_id' => 'user_123']);
+
+    // Free member only gets read permissions
+    $user->setMcpRole('member');
+    $user->setMcpPermissions([
+        'bookmarks:read',
+        'lists:read',
+        'tags:read',
     ]);
 
-    expect($result)->toBeTrue();
+    Auth::setUser($user);
 
-    Http::assertSent(function ($request) {
-        $body = $request->data();
+    $listTool = new ListAllListsTool;
+    $createTool = new CreateBookmarkTool;
+    $deleteTool = new DeleteBookmarkTool;
 
-        return count($body) === 3
-            && $body[0]['resource_id'] === 'create-bookmark-tool'
-            && $body[1]['resource_id'] === 'update-bookmark-tool'
-            && $body[2]['resource_id'] === 'delete-bookmark-tool';
-    });
+    expect($listTool->shouldRegister())->toBeTrue();
+    expect($createTool->shouldRegister())->toBeFalse();
+    expect($deleteTool->shouldRegister())->toBeFalse();
 });

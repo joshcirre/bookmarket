@@ -17,7 +17,8 @@ class VerifyWorkOsJwt
      * Handle an incoming request.
      *
      * Validates JWT tokens issued by WorkOS AuthKit and attaches
-     * the authenticated user to the request.
+     * the authenticated user to the request. Also extracts role and
+     * permissions claims from the token for RBAC.
      *
      * @param  Closure(Request): Response  $next
      */
@@ -39,6 +40,11 @@ class VerifyWorkOsJwt
             if (! $user) {
                 return $this->unauthorizedResponse('User not found for sub: '.$decoded->sub);
             }
+
+            // Extract role and permissions from JWT claims (set by WorkOS AuthKit RBAC)
+            // These are only present when user has an organization membership
+            $user->setMcpRole($decoded->role ?? null);
+            $user->setMcpPermissions($decoded->permissions ?? []);
 
             // Set the user on Laravel's auth system so MCP Request->user() works
             Auth::setUser($user);

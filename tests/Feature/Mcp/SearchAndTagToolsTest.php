@@ -12,8 +12,23 @@ use App\Models\BookmarkList;
 use App\Models\Tag;
 use App\Models\User;
 
-test('search_bookmarks finds by title', function (): void {
+/**
+ * Helper to create a user with all MCP permissions for testing.
+ */
+function createSearchTestUser(): User
+{
     $user = User::factory()->create();
+    $user->setMcpPermissions([
+        'bookmarks:read', 'bookmarks:write', 'bookmarks:delete',
+        'lists:read', 'lists:write', 'lists:delete',
+        'tags:read', 'tags:write',
+    ]);
+
+    return $user;
+}
+
+test('search_bookmarks finds by title', function (): void {
+    $user = createSearchTestUser();
     $list = BookmarkList::factory()->for($user)->create();
     Bookmark::factory()->for($list)->for($user)->create(['title' => 'Laravel Documentation']);
     Bookmark::factory()->for($list)->for($user)->create(['title' => 'Vue Guide']);
@@ -27,7 +42,7 @@ test('search_bookmarks finds by title', function (): void {
 });
 
 test('search_bookmarks finds by url', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $list = BookmarkList::factory()->for($user)->create();
     Bookmark::factory()->for($list)->for($user)->create([
         'title' => 'Some Site',
@@ -42,7 +57,7 @@ test('search_bookmarks finds by url', function (): void {
 });
 
 test('search_bookmarks finds by domain', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $list = BookmarkList::factory()->for($user)->create();
     Bookmark::factory()->for($list)->for($user)->create([
         'title' => 'GitHub Repo',
@@ -58,7 +73,7 @@ test('search_bookmarks finds by domain', function (): void {
 });
 
 test('search_bookmarks can filter by list', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $list1 = BookmarkList::factory()->for($user)->create();
     $list2 = BookmarkList::factory()->for($user)->create();
 
@@ -78,7 +93,7 @@ test('search_bookmarks can filter by list', function (): void {
 });
 
 test('search_bookmarks does not return other users bookmarks', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $otherUser = User::factory()->create();
 
     $list = BookmarkList::factory()->for($user)->create();
@@ -97,7 +112,7 @@ test('search_bookmarks does not return other users bookmarks', function (): void
 });
 
 test('list_tags returns user tags with counts', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $list = BookmarkList::factory()->for($user)->create();
 
     $tag1 = Tag::findOrCreateByName('php');
@@ -121,7 +136,7 @@ test('list_tags returns user tags with counts', function (): void {
 });
 
 test('list_tags does not include other users tags', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $otherUser = User::factory()->create();
 
     $list = BookmarkList::factory()->for($user)->create();
@@ -140,7 +155,7 @@ test('list_tags does not include other users tags', function (): void {
 });
 
 test('sync_bookmark_tags adds new tags', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $list = BookmarkList::factory()->for($user)->create();
     $bookmark = Bookmark::factory()->for($list)->for($user)->create();
 
@@ -158,7 +173,7 @@ test('sync_bookmark_tags adds new tags', function (): void {
 });
 
 test('sync_bookmark_tags replaces existing tags', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $list = BookmarkList::factory()->for($user)->create();
     $bookmark = Bookmark::factory()->for($list)->for($user)->create();
 
@@ -179,7 +194,7 @@ test('sync_bookmark_tags replaces existing tags', function (): void {
 });
 
 test('sync_bookmark_tags with empty array removes all tags', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $list = BookmarkList::factory()->for($user)->create();
     $bookmark = Bookmark::factory()->for($list)->for($user)->create();
 
@@ -195,7 +210,7 @@ test('sync_bookmark_tags with empty array removes all tags', function (): void {
 });
 
 test('sync_bookmark_tags reuses existing tags', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $list = BookmarkList::factory()->for($user)->create();
     $bookmark = Bookmark::factory()->for($list)->for($user)->create();
 
@@ -216,7 +231,7 @@ test('sync_bookmark_tags reuses existing tags', function (): void {
 });
 
 test('cleanup_tags finds duplicate tags', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $list = BookmarkList::factory()->for($user)->create();
 
     // Create tags with similar names (different casing)
@@ -239,7 +254,7 @@ test('cleanup_tags finds duplicate tags', function (): void {
 });
 
 test('cleanup_tags returns clean message when no duplicates', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $list = BookmarkList::factory()->for($user)->create();
 
     $tag = Tag::findOrCreateByName('unique-tag');
@@ -254,7 +269,7 @@ test('cleanup_tags returns clean message when no duplicates', function (): void 
 });
 
 test('cleanup_tags merges tags correctly', function (): void {
-    $user = User::factory()->create();
+    $user = createSearchTestUser();
     $list = BookmarkList::factory()->for($user)->create();
 
     // Create duplicate tags with different slugs
